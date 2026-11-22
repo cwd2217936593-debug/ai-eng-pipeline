@@ -103,7 +103,8 @@ ai-eng-pipeline/
 │   ├── rulepacks/            规则包：格式模板 + 2 个示例（冷库紧固件 / Web 基线）
 │   └── roles/                5 个角色卡（lead/spec/architect/builder/reviewer）
 ├── scripts/                  init_run / check_run / bump
-└── assets/templates/         10 份产物空壳
+├── tests/                    对抗回归测试（fixtures/base + 10 种作弊注入）
+└── assets/templates/         10 份产物空壳（占位符出厂，不含任何通过态）
 ```
 
 ## 11 条不变量
@@ -173,6 +174,28 @@ E3（模型自身知识）被强制显性化成"待确认问题"，是这条路�
 
 > 我在读产物之前，是不是已经知道答案了？
 > 答"是"即确认偏误，该条判否。
+
+## 门禁自己怎么防作弊
+
+门禁列表写得再全，也要回答一个问题：**假装做完了能不能穿过去？**
+
+v3.0.0 的答案是"能"：空模板原样交付有 13 项判 OK——模板出厂自带 `REVIEW_MODE: blinded`、
+结论注释里含 `PASS`、占位行有编号无内容，而检查器只认"编号存在"。
+
+v3.1.0 把 10 种作弊手法做成可重复注入的回归测试（`tests/test_attacks.py`）：
+
+| 注入 | 抓它的门禁 |
+|---|---|
+| 空模板原样交付 | 占位行识别（`is_stub_row`）+ 5 项 NG |
+| lead 自批豁免（"3 轮上限不适用"） | G3.9 |
+| 汇总 P1=0 清单混 P1 | G3.3 交叉核对 |
+| 盲审正文引用架构文档 | G3.1b |
+| 孤儿填 0 但矩阵缺行 | G3.8b |
+| clause 待核却标 verified | G2.9c |
+| 05 只剩 README | I.0 |
+
+改 `check_run.py` 判定逻辑后必须跑：`python tests/test_attacks.py`。
+这套测试的前提也写进了 gates.md 末尾。
 
 ## 版本策略
 

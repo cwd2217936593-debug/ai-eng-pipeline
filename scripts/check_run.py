@@ -127,9 +127,53 @@ def section(text: str, key: str) -> str:
     return "\n".join(out)
 
 
+BLANK_CELLS = ("", "—", "N/A", "待填", "待补", "TBD", "TODO", "xxx", "...", "…")
+
+
 def is_blank(cell: str) -> bool:
-    cell = cell.strip()
-    return cell in ("", "__", "—", "N/A", "待填")
+    """空单元格。占位符一律算空 —— 模板预置的 __ / 待填 / … 不是内容。"""
+    c = cell.strip()
+    if c in BLANK_CELLS:
+        return True
+    return bool(re.fullmatch(r"_+|—+|\.{3,}", c))
+
+
+def _anchor_ok(cell: str) -> bool:
+    """分层落点是否真的指了地方。`03` § 这种"有文件没小节"算未填。"""
+    c = cell.strip().strip("`")
+    if is_blank(c):
+        return False
+    if re.search(r"§\s*$", c):
+        return False
+    if re.fullmatch(r"[\w\-\.]+", c) and not c.endswith("/"):
+        # 允许：带扩展名的文件名、本项目产物名（00d / 03）、目录（以 / 结尾）
+        # 拒绝：光秃秃的目录词（如只写 "src"），因为它没指到具体内容
+        return bool(re.match(r"^0\d[a-z]?$", c)) or len(c.split(".")) > 1
+    return True
+
+
+def _layer_ok(text: str, lv: str) -> bool:
+    """分层落点是否真有内容。`- **L2 总体**：` 这种只有标签不算。"""
+    for cells in table_rows(text):
+        if cells and cells[0].strip().startswith(lv):
+            if len(cells) > 1 and not is_blank(cells[1]) and len(cells[1].strip()) >= 2:
+                return True
+    for line in text.splitlines():
+        if line.lstrip().startswith("|"):
+            continue          # 表格行已在上面的分支判过，不许走兜底
+        if lv in line:
+            rest = re.sub(r"^.*?%s" % lv, "", line, count=1)
+            rest = re.sub(r"[*_`\s]+", "", rest).lstrip("：:-—")
+            if len(rest) >= 4:
+                return True
+    return False
+
+
+def is_stub_row(cells: list) -> bool:
+    """占位行：除编号列外全空。模板预置的 `| AC1 | | |` 属此类，不计为内容。"""
+    if len(cells) < 2:
+        return True
+    return all(is_blank(c) for c in cells[1:])
 
 
 # ---------------------------------------------------------------- G0 领域门禁
@@ -443,7 +487,9 @@ def check_g010(run: Path) -> None:
         else:
             ng("G0.10.5", "无假设表也未声明「输入缺口: 无」（不许留空当无事）")
 
-    if len(ah) > cap:
+    if bad_ah:
+        ng("G0.10.6", "假设表不合格，数量判定无意义", "先过 G0.10.5")
+    elif len(ah) > cap:
         ng("G0.10.6", "假设 %d 条超 %s 级上限 %d <- 需求没聊清楚，回去问" % (len(ah), level, cap))
     else:
         ok("G0.10.6", "假设 %d 条 ≤ %s 级上限 %d" % (len(ah), level, cap))
@@ -451,7 +497,12 @@ def check_g010(run: Path) -> None:
     # 0.10.7 场景标签
     m = re.search(r"场景标签[^\n]*", text)
     tag = m.group(0) if m else ""
-    if tag.count("×") >= 3:
+    parts = [x.strip().strip("`*") for x in re.split(r"×", tag.split(":")[-1].split("：")[-1])] if "×" in tag else []
+    parts = [x for x in parts if x]
+    bad_tag = [x for x in parts if is_blank(x) or re.fullmatch(r"_+|__+", x)]
+    if bad_tag or len(parts) < 4:
+        ng("G0.10.7", "场景标签四域未填满 <- %r" % tag[:50], "需要 `环境 × 介质 × 载荷 × 法规` 四个实值")
+    elif tag.count("×") >= 3:
         ok("G0.10.7", "场景标签已给出（四域）")
     else:
         ng("G0.10.7", "场景标签缺失或未用四域组合 <- %r" % tag[:40])
@@ -539,7 +590,7 @@ def check_g1(run: Path) -> None:
 
     req_ids = []
     for cells in table_rows(r1):
-        if cells and re.fullmatch(r"R\d+", cells[0]):
+        if cells and re.fullmatch(r"R\d+", cells[0]) and not is_stub_row(cells):
             req_ids.append(cells[0])
     req_ids = list(dict.fromkeys(req_ids))
     if req_ids:
@@ -560,7 +611,7 @@ def check_g1(run: Path) -> None:
 
     ac_rows = {}
     for cells in table_rows(r2):
-        if cells and re.fullmatch(r"AC\d+", cells[0]):
+        if cells and re.fullmatch(r"AC\d+", cells[0]) and not is_stub_row(cells):
             cov = cells[1] if len(cells) > 1 else ""
             ac_rows[cells[0]] = cov
     if ac_rows:
@@ -609,8 +660,10 @@ def check_g1(run: Path) -> None:
                     hits.append("%s:%s" % (cells[0], w))
     if hits:
         ng("G1.4", "02 判据含不可测词", ",".join(hits))
-    else:
+    elif ac_rows:
         ok("G1.4", "02 判据无不可测词")
+    else:
+        ng("G1.4", "02 无可判定的 AC 行", "无判据不等于无不可测词")
 
     if "冲突与未决" in r1:
         seg = section(r1, "冲突与未决")
@@ -637,6 +690,8 @@ def check_g1(run: Path) -> None:
 
     scope = section(r1, "范围边界")
     items = [l for l in scope.splitlines() if re.match(r"^\s*(\d+[\.\)]|[-*])\s+\S", l)]
+    items = [l for l in items
+             if len(re.sub(r"^\s*(\d+[\.\)]|[-*])\s+", "", l).strip()) >= 5]
     if len(items) >= 2:
         ok("G1.6", "01 范围边界 %d 条" % len(items))
     else:
@@ -650,7 +705,9 @@ def check_g1(run: Path) -> None:
     for cells in table_rows(r1):
         if cells and re.fullmatch(r"R\d+", cells[0]):
             src = cells[2] if len(cells) > 2 else ""
-            if src.strip() and not SRC_OK.search(src):
+            if is_blank(src):
+                unsourced.append("%s:空来源" % cells[0])
+            elif not SRC_OK.search(src):
                 unsourced.append("%s:%s" % (cells[0], src[:12]))
     if not has_scene:
         ok("G1.8", "不适用（无 00d，按 v2 口径）")
@@ -693,7 +750,12 @@ def check_g2(run: Path) -> None:
     ac_ids = [c[0] for c in table_rows(r2) if c and re.fullmatch(r"AC\d+", c[0])]
     mapped = set()
     if "验证路径" in r3:
-        mapped = set(re.findall(r"AC\d+", section(r3, "验证路径")))
+        seg23 = section(r3, "验证路径")
+        rows23 = [c for c in table_rows(seg23) if c and re.fullmatch(r"AC\d+", c[0])]
+        if rows23:
+            mapped = {c[0] for c in rows23 if not is_stub_row(c)}
+        else:
+            mapped = set(re.findall(r"AC\d+", seg23))
     miss = [a for a in ac_ids if a not in mapped]
     if ac_ids and not miss:
         ok("G2.3", "03 验证路径覆盖全部 AC")
@@ -756,14 +818,13 @@ def check_g2(run: Path) -> None:
             ok("G2.9", "规则包 %d 个已锁版本，RULE 引用 %d 处" % (len(packs), len(cited)))
 
     # G2.10 分层落点（L2/L3/L4 都要写到，允许合并声明）
-    both = r3 + "\n" + r4
-    miss_layer = [lv for lv in ("L2", "L3", "L4") if not re.search(r"\b%s\b" % lv, both)]
+    miss_layer = [lv for lv in ("L2", "L3", "L4") if not _layer_ok(r3, lv)]
     if miss_layer:
-        ng("G2.10", "分层缺落点 <- %s（可合并，不可省略）" % ", ".join(miss_layer))
-    elif not re.search(r"\bL5\b|05-实现", r4):
-        ng("G2.10", "04 未映射到 L5（实现）")
-    elif not re.search(r"\bL6\b|验证|测试", r4):
-        ng("G2.10", "04 未映射到 L6（验证）")
+        ng("G2.10", "分层缺落点或只有标签 <- %s（可合并，不可省略）" % ", ".join(miss_layer))
+    elif not _layer_ok(r4, "L5"):
+        ng("G2.10", "04 未写 L5（实现）落点")
+    elif not _layer_ok(r4, "L6"):
+        ng("G2.10", "04 未写 L6（验证）落点")
     else:
         ok("G2.10", "L2-L4 有落点，04 覆盖 L5/L6")
 
@@ -788,30 +849,52 @@ def check_g3(run: Path) -> None:
     seg = section(r6, "读过的文件")
     listed = re.findall(r"`?([A-Za-z]:[\\/][^`\n]*|/[^`\n]*|[\w\-\.]+\.md|05-实现[^\s`]*)", seg)
     leaked = [x for x in listed if any(k in x for k in ("01-需求规格", "03-架构方案", "04-实施路径"))]
+    real_path = [x for x in listed if len(x.strip("` ")) >= 4 and re.search(r"[\\/]|\.md$", x)]
+    # 正文污染：即使清单干净，报告里也不能引用未授权的 01/03/04 内容
+    body = re.sub(r"<!--.*?-->", "", r6, flags=re.S)
+    body = body.replace(seg, "")
+    cite = re.findall(r"(01-需求规格|03-架构方案|04-实施路径|架构方案|架构文档|§\s*3[b-z]?)", body)
+    if cite:
+        leaked = list(leaked) + ["正文引用 " + c for c in sorted(set(cite))[:3]]
     if leaked:
         ng("G3.1b", "审查读到了未授权文件", ",".join(sorted(set(leaked))))
-    elif seg.strip():
-        ok("G3.1b", "审查文件清单未见越权读取")
+    elif real_path:
+        ok("G3.1b", "审查自证读过 %d 个文件，未见越权" % len(set(real_path)))
     else:
-        ng("G3.1b", "06 未自证读过哪些文件")
+        ng("G3.1b", "06 未写出实际读过的文件路径（只有序号不算自证）")
 
     # 逐级别取数：有 `P0=2` 这类显式写法就信它，没有就数问题清单表里的行
-    levels = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
-    rows_cache = table_rows(r6)
-    for lv in levels:
+    levels, missing_lv = {}, []
+    for lv in ("P0", "P1", "P2", "P3"):
         mm = re.search(lv + r"\s*[=:：]\s*(\d+)", r6)
         if mm:
             levels[lv] = int(mm.group(1))
+        elif lv in ("P0", "P1"):
+            levels[lv] = 0
+            missing_lv.append(lv)          # 决定 PASS 的两级必须显式
         else:
-            levels[lv] = sum(1 for cells in rows_cache
-                             if any(c.strip() == lv for c in cells))
+            levels[lv] = -1                 # 未声明：下面按清单行数取，不当作 0
+    counted = {lv: sum(1 for cells in table_rows(r6) if any(c.strip() == lv for c in cells))
+               for lv in ("P0", "P1", "P2", "P3")}
+    for lv in ("P2", "P3"):
+        if levels[lv] < 0:
+            levels[lv] = counted[lv]
+    drift = ["%s 汇总=%d 清单=%d" % (lv, levels[lv], counted[lv])
+             for lv in counted if counted[lv] > levels[lv]]
     open_bad = levels["P0"] + levels["P1"]
-    if open_bad == 0:
-        ok("G3.3", "未闭环 P0/P1 = 0")
+    if missing_lv:
+        ng("G3.3", "06 未显式给出全部级别计数 <- 缺 %s" % ",".join(missing_lv),
+           "零问题也要写 P0 = 0；留空让脚本猜 = 空清单当无问题")
+    elif drift:
+        ng("G3.3", "问题级别与汇总不符 <- %s" % "; ".join(drift), "疑似 B3 静默降级")
+    elif open_bad == 0:
+        ok("G3.3", "未闭环 P0/P1 = 0（显式声明）")
     else:
         ng("G3.3", "存在未闭环问题 P0=%d P1=%d" % (levels["P0"], levels["P1"]))
 
-    passed = bool(re.search(r"结论[:：]?\s*PASS|结论[^\n]*\bPASS\b", r6))
+    # 结论判定前先剥掉 HTML 注释与引用块：模板里的 `<!-- PASS 仅当 ... -->` 不是结论
+    r6_body = re.sub(r"<!--.*?-->", "", r6, flags=re.S)
+    passed = bool(re.search(r"结论[:：]?\s*PASS|结论[^\n]*\bPASS\b", r6_body))
     if passed and open_bad == 0:
         ok("G3.2", "结论 PASS 且与级别自洽")
     elif passed and open_bad > 0:
@@ -848,8 +931,12 @@ def check_g3(run: Path) -> None:
         ok("G3.7", "有问题清单，非空审查（P0=%d P1=%d P2=%d）"
            % (levels["P0"], levels["P1"], levels["P2"]))
 
-    if re.search(r"G1\s*\|", r7) or "G1" in r7:
-        ok("G3.5", "07 有门禁判定记录")
+    g_rows = [c for c in table_rows(r7) if c and re.fullmatch(r"(G0(\.\d+)?|G1|G2|G3)", c[0].strip())]
+    filled_g = [c[0] for c in g_rows if len(c) > 1 and not is_blank(c[1])]
+    if filled_g:
+        ok("G3.5", "07 门禁判定已填 %s" % ",".join(filled_g))
+    elif g_rows:
+        ng("G3.5", "07 门禁表存在但结果列全空 <- %s" % ",".join(c[0] for c in g_rows))
     else:
         ng("G3.5", "07 无门禁判定记录")
     if re.search(r"[Ss]/[Mm]/[Ll]|级别[:：]\s*(S|M|L)", r7):
@@ -868,10 +955,13 @@ def check_g3(run: Path) -> None:
         ng("G3.8", "缺 08-追溯矩阵.md（全链路未闭合）")
     else:
         orph = _section_rows(r8, "孤儿统计") or []
-        nz, closed = [], []
+        nz, closed, unknown = [], [], []
         for cells in orph:
             num = cells[1] if len(cells) > 1 else ""
             tail = " ".join(cells[2:]) if len(cells) > 2 else ""
+            if is_blank(num):
+                unknown.append((cells[0] or "?")[:10])
+                continue
             m = re.search(r"\d+", num)
             if m and int(m.group()) > 0:
                 dm = re.search(r"D\d+", tail)
@@ -884,9 +974,20 @@ def check_g3(run: Path) -> None:
         miss_l = []
         for lv in ("L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"):
             row = [c for c in layer if c and c[0].startswith(lv)]
-            if not row or len(row[0]) < 2 or is_blank(row[0][1]):
+            if not row or len(row[0]) < 2 or not _anchor_ok(row[0][1]):
                 miss_l.append(lv)
-        if nz:
+        seen_kind = set()
+        for cells in orph:
+            if cells:
+                seen_kind.add(re.sub(r"[（(].*", "", cells[0]).strip())
+        kinds = ("孤儿需求", "孤儿设计", "未验设计", "无源参数", "孤儿场景")
+        lack = [k for k in kinds if not any(k in s for s in seen_kind)]
+        if unknown:
+            ng("G3.8", "孤儿数量未填 <- %s" % ", ".join(unknown),
+               "没扫过不等于 0；每类必须显式写数字（含 0）")
+        elif lack:
+            ng("G3.8", "孤儿统计缺类别 <- %s" % ", ".join(lack))
+        elif nz:
             ng("G3.8", "追溯矩阵有孤儿 <- %s（带 D# 者结论须标「带缺陷交付」）" % ", ".join(nz))
         elif miss_l:
             ng("G3.8", "分层覆盖缺落点 <- %s" % ", ".join(miss_l))
@@ -895,8 +996,33 @@ def check_g3(run: Path) -> None:
         else:
             ok("G3.8", "五类孤儿为 0，L0-L7 全覆盖")
 
+        # 矩阵覆盖：01 的每条 R、02 的每条 AC 都要在矩阵里有一行
+        mrows = _section_rows(r8, "矩阵") or []
+        have_r, have_ac = set(), set()
+        for cells in mrows:
+            if len(cells) > 1: have_r |= set(re.findall(r"R\d+", cells[1]))
+            if len(cells) > 3: have_ac |= set(re.findall(r"AC\d+", cells[3]))
+        r1_txt = read(run / "01-需求规格.md")
+        need_r = {c[0] for c in table_rows(r1_txt)
+                  if c and re.fullmatch(r"R\d+", c[0]) and not is_stub_row(c)}
+        need_ac = {c[0] for c in table_rows(r2)
+                   if c and re.fullmatch(r"AC\d+", c[0]) and not is_stub_row(c)}
+        miss_r, miss_ac = sorted(need_r - have_r), sorted(need_ac - have_ac)
+        if miss_r or miss_ac:
+            ng("G3.8b", "矩阵未逐条列举 <- R:%s AC:%s" % (",".join(miss_r) or "-", ",".join(miss_ac) or "-"),
+               "孤儿填 0 但矩阵缺行 = 自述代替扫描")
+        else:
+            ok("G3.8b", "矩阵覆盖全部 %d 条 R 与 %d 条 AC" % (len(need_r), len(need_ac)))
+
     # G3.9 无绕过痕迹
     bad = []
+    # I10：被约束者无权宣布约束不适用。豁免行必须能指到用户，不能由 lead 自己批
+    ex_lines = [l for l in r7.splitlines()
+                if re.search(r"不适用|豁免|免做|跳过", l) and l.lstrip().startswith("|")]
+    self_ex = [l for l in ex_lines
+               if not re.search(r"用户|客户|甲方|需求方|user", l)]
+    if self_ex:
+        bad.append("自我豁免 %d 条（豁免须用户明示，不能 lead 自批）" % len(self_ex))
     if re.search(r"VOID-", r7):
         bad.append("07 有未处置的 VOID 记录")
     m = re.search(r"级别\s*[:：]\s*\**\s*S\b", r7)
@@ -915,6 +1041,46 @@ def check_g3(run: Path) -> None:
 
 
 # ---------------------------------------------------------------- 05
+
+def check_rulepacks(run: Path) -> None:
+    """R3（社区实践）不得用于拒收。扫 run 内与发行包内的 rulepack.yaml。"""
+    skill_root = Path(__file__).resolve().parent.parent
+    dirs = [run / "rulepacks", skill_root / "references" / "rulepacks"]
+    bad, fake = [], []
+    for d in dirs:
+        if not d.is_dir():
+            continue
+        for f in d.rglob("*.yaml"):
+            try:
+                txt = f.read_text(encoding="utf-8", errors="replace")
+            except Exception:
+                continue
+            cur_lv, cur_clause = None, ""
+            for line in txt.splitlines():
+                m4 = re.match(r"\s*clause\s*:\s*(.*)", line)
+                if m4:
+                    cur_clause = m4.group(1).strip('"\' ')
+                m = re.match(r"\s*-?\s*level\s*:\s*(R[0-3])", line)
+                if m:
+                    cur_lv = m.group(1)
+                    continue
+                m3 = re.match(r"\s*clause_verified\s*:\s*true", line)
+                if m3 and cur_clause and re.fullmatch(r"待核|待补|待确认|TBD|n/?a|无|-", cur_clause.strip()):
+                    fake.append("%s:%s" % (f.name, cur_clause.strip()))
+                m2 = re.match(r"\s*severity_if_fail\s*:\s*(\S+)", line)
+                if m2 and cur_lv == "R3" and m2.group(1) not in ("advise", "info", "warn"):
+                    bad.append("%s: R3 却 severity=%s" % (f.name, m2.group(1)))
+    if bad:
+        ng("G2.9b", "R3 规则被当拒收判据 <- %s" % "; ".join(sorted(set(bad))[:4]),
+           "社区 checklist 只能 advise（rulepack.md §3）")
+    elif (run / "rulepacks").is_dir() or (skill_root / "references" / "rulepacks").is_dir():
+        ok("G2.9b", "规则包 R3 未越权用于拒收")
+    if fake:
+        ng("G2.9c", "条号未核却标 clause_verified <- %s" % "; ".join(sorted(set(fake))[:4]),
+           "编标准号容易，编对条号很难：未核一律 false")
+    elif (run / "rulepacks").is_dir() or (skill_root / "references" / "rulepacks").is_dir():
+        ok("G2.9c", "无「声称已核条号但内容是待核」的规则")
+
 
 def check_impl(run: Path) -> None:
     impl = run / "05-实现"
@@ -940,12 +1106,23 @@ def check_impl(run: Path) -> None:
     else:
         ok("I.1", "05 无 TODO/空实现，单文件 ≤300 行")
 
+    others = [p for p in impl.iterdir() if p.is_file() and p.name != "README.md"]
+    others += [p for p in impl.iterdir() if p.is_dir()]
+    if not others:
+        ng("I.0", "05-实现 只有 README，没有交付实体", "说明文档不是交付物（B4 空产物）")
+    else:
+        ok("I.0", "05-实现 有 %d 项交付实体" % len(others))
+
     readme = impl / "README.md"
     r2 = read(run / "02-验收标准.md")
     ac_ids = [c[0] for c in table_rows(r2) if c and re.fullmatch(r"AC\d+", c[0])]
     if readme.is_file() and ac_ids:
         txt = read(readme)
-        miss = [a for a in ac_ids if a not in txt]
+        mapped2 = {c[0] for c in table_rows(txt)
+                   if c and re.fullmatch(r"AC\d+", c[0]) and not is_stub_row(c)}
+        if not mapped2:
+            mapped2 = set(a for a in ac_ids if a in txt)
+        miss = [a for a in ac_ids if a not in mapped2]
         if miss:
             ng("I.2", "05 README 缺 AC→测试映射", ",".join(miss))
         else:
@@ -979,7 +1156,8 @@ def main() -> int:
         check_g2(run)
     if args.stage in ("g3", "all"):
         check_g3(run)
-        check_impl(run)
+    check_rulepacks(run)
+    check_impl(run)
 
     width = max(len(r[1]) for r in results)
     for good, cid, desc, detail in results:
