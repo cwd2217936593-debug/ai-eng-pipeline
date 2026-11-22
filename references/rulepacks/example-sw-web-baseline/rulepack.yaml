@@ -1,0 +1,160 @@
+# 示例包：Web 应用基线
+#
+# ⚠️ 章节号标为「类级」的地方（如 V2/V3）只到 ASVS 的大类，未细到条，
+#    因此 clause_verified 一律 false。用前须到 ASVS 正文逐条落号。
+#
+# 这个包示范三件事：
+#   1) 认证类规则的 check 必须可执行（不是"应安全"）
+#   2) 规范类规则可以完全机械校验（SemVer / Conventional Commits）
+#   3) 社区实践（R3）只能 advise —— 见 RULE-WEB-009
+
+pack: example-sw-web-baseline
+version: 0.1.0
+domain: software
+applies_to: ["常温", "干燥室内", "静态", "工业"]   # 软件用温度/腐蚀两域恒为默认，主看载荷与法规
+maintainer: 待指定（示例包）
+last_reviewed: 2026-11-22
+notes: "ASVS 大类级引用，未落到条；社区类规则仅作建议"
+
+sources:
+  - id: SRC-ASVS
+    title: OWASP Application Security Verification Standard (ASVS) 5.0
+    year: 2025
+    level: R1
+    how_to_verify: owasp.org 与 github.com/OWASP/ASVS
+  - id: SRC-CIS
+    title: CIS Benchmarks（按目标平台选具体基准，如 Nginx / PostgreSQL / Ubuntu 22.04）
+    year: 2024
+    level: R1
+    how_to_verify: cisecurity.org
+  - id: SRC-SEMVER
+    title: Semantic Versioning 2.0.0
+    year: 2013
+    level: R2
+    how_to_verify: semver.org
+  - id: SRC-CONVCOMMITS
+    title: Conventional Commits 1.0.0
+    year: 2020
+    level: R2
+    how_to_verify: conventionalcommits.org
+  - id: SRC-ENGSQ-PRACTICES
+    title: google/eng-practices（代码评审指南）
+    year: 2023
+    level: R3
+    how_to_verify: github.com/google/eng-practices
+  - id: SRC-TWELVEFACTOR
+    title: The Twelve-Factor App
+    year: 2017
+    level: R3
+    how_to_verify: 12factor.net
+
+rules:
+  - id: RULE-WEB-001
+    text: 用户认证模块须按 ASVS 认证类逐条验证，口令策略、防爆破、找回流程均在范围内
+    source: SRC-ASVS
+    clause: "V2（认证）—待细核具体条号"
+    clause_verified: false
+    level: R1
+    severity_if_fail: reject
+    check: 按 V2 条目清单逐条给出实现证据（配置项 / 代码位置 / 测试用例）
+    evidence_needed: 条目对照表 + 测试记录
+    drives: [DC-AUTH]
+
+  - id: RULE-WEB-002
+    text: 会话管理须按 ASVS 会话类验证，含会话失效、并发会话、令牌存储位置
+    source: SRC-ASVS
+    clause: "V3（会话管理）—待细核具体条号"
+    clause_verified: false
+    level: R1
+    severity_if_fail: reject
+    check: 登出后重放旧令牌必须失败；令牌不得出现在 URL 或日志中
+    evidence_needed: 测试记录（请求/响应原文）
+    drives: [DC-AUTH]
+
+  - id: RULE-WEB-003
+    text: 所有外部输入须在服务端做校验与编码，客户端校验只作体验优化不计入验证
+    source: SRC-ASVS
+    clause: "V5（校验、净化与编码）—待细核具体条号"
+    clause_verified: false
+    level: R1
+    severity_if_fail: reject
+    check: 逐个入口提交越界值、特殊字符、超长串，确认服务端拒绝或安全编码
+    evidence_needed: 测试用例与结果
+    drives: [DC-INPUT]
+
+  - id: RULE-WEB-004
+    text: 错误处理不得向客户端泄漏堆栈、SQL、内部路径；同时须记录足够定位信息且不记录敏感字段
+    source: SRC-ASVS
+    clause: "V7（错误处理与日志）—待细核具体条号"
+    clause_verified: false
+    level: R1
+    severity_if_fail: block
+    check: 触发 500，检查响应体与日志内容各含什么
+    evidence_needed: 响应原文 + 日志片段
+    drives: [DC-ERR]
+
+  - id: RULE-WEB-005
+    text: 传输须全程加密，禁止明文回退；敏感数据静态存储须加密或不可逆散列
+    source: SRC-ASVS
+    clause: "V8/V9（数据保护与通信）—待细核具体条号"
+    clause_verified: false
+    level: R1
+    severity_if_fail: reject
+    check: 检查 TLS 配置（最低版本、套件）、HSTS、是否存在 http 兜底；抽查库中敏感字段形态
+    evidence_needed: 配置导出 + 字段样例（脱敏）
+    drives: [DC-DATA]
+
+  - id: RULE-WEB-006
+    text: 生产部署须按目标平台的 CIS 基准加固，偏差项逐条记录理由
+    source: SRC-CIS
+    clause: "按平台选基准—待指定"
+    clause_verified: false
+    level: R1
+    severity_if_fail: block
+    check: 跑基准扫描或人工对照清单，输出通过/偏差/理由三列
+    evidence_needed: 加固对照表
+    drives: [DC-DEPLOY]
+
+  - id: RULE-WEB-007
+    text: 版本号须符合语义化版本，破坏性变更必须升主版本
+    source: SRC-SEMVER
+    clause: "规则 8（主版本号）"
+    clause_verified: true
+    level: R2
+    severity_if_fail: reject
+    check: 机械校验：比对相邻 tag 的 API 变更与版本号升位是否一致
+    evidence_needed: tag 列表 + 变更说明
+    drives: [DC-VER]
+
+  - id: RULE-WEB-008
+    text: 提交信息须符合约定式提交格式，type 取自允许集合
+    source: SRC-CONVCOMMITS
+    clause: "§1 提交类型"
+    clause_verified: true
+    level: R2
+    severity_if_fail: block
+    check: '机械校验：正则匹配 `^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+`'
+    evidence_needed: 提交列表校验结果
+    drives: [DC-VER]
+
+  - id: RULE-WEB-009
+    text: 代码评审宜控制单次变更规模，便于逐行审阅
+    source: SRC-ENGSQ-PRACTICES
+    clause: "Small CLs"
+    clause_verified: true
+    level: R3
+    severity_if_fail: advise   # R3 只能 advise，写成 reject 会导致整包不合格
+    check: 统计单次 PR 改动行数，超大时提示拆分
+    evidence_needed: PR 统计
+    drives: [DC-REVIEW]
+
+  - id: RULE-WEB-010
+    text: 配置宜与代码分离，通过环境变量注入
+    source: SRC-TWELVEFACTOR
+    clause: "III. Config"
+    clause_verified: true
+    level: R3
+    severity_if_fail: advise
+    check: 搜索代码库中的硬编码密钥/地址
+    evidence_needed: 扫描结果
+    drives: [DC-DEPLOY]

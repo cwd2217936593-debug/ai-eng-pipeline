@@ -1,0 +1,146 @@
+# 示例包：低温环境紧固件（-20℃ 以下）
+#
+# ⚠️ 本包为格式示例。所有 clause 均未核对（clause_verified: false），
+#    不得直接用作拒收判据。用前必须逐条查标准正文。
+#
+# 这个包解决的是「冷库螺丝」这类问题：同样是 M8，低温服役和常温服役是两个零件。
+# 判据链：材料冲击韧性 → 表面处理 → 盐雾 → 预紧力 → 防松
+
+pack: example-hw-fastener-cold
+version: 0.1.0
+domain: hardware
+applies_to: ["低温", "凝露"]
+maintainer: 待指定（示例包）
+last_reviewed: 2026-11-22
+notes: "仅示范推导链与字段写法；条号未核，禁作判据"
+
+sources:
+  - id: SRC-ASTM-A320
+    title: ASTM A320/A320M Standard Specification for Alloy-Steel and Stainless Steel Bolting for Low-Temperature Service
+    year: 2021
+    level: R0
+    how_to_verify: ASTM 官网 / 标准全文库；供应商标注 "A320 L7" 时应能提供质保书
+  - id: SRC-GBT-3098-1
+    title: GB/T 3098.1-2010 紧固件机械性能 螺栓、螺钉和螺柱
+    year: 2010
+    level: R0
+    how_to_verify: 国家标准全文公开系统
+  - id: SRC-ISO-3506-1
+    title: ISO 3506-1 Mechanical properties of corrosion-resistant stainless steel fasteners
+    year: 2020
+    level: R1
+    how_to_verify: ISO 官网 / 标准全文库
+  - id: SRC-ISO-4042
+    title: ISO 4042 Fasteners — Electroplated coating systems
+    year: 2018
+    level: R1
+    how_to_verify: ISO 官网
+  - id: SRC-GBT-10125
+    title: GB/T 10125-2021 人造气氛腐蚀试验 盐雾试验
+    year: 2021
+    level: R0
+    how_to_verify: 国家标准全文公开系统
+  - id: SRC-GBT-2423-1
+    title: GB/T 2423.1-2008 电工电子产品环境试验 第2部分：试验方法 试验A：低温
+    year: 2008
+    level: R0
+    how_to_verify: 国家标准全文公开系统
+  - id: SRC-VDI-2230
+    title: VDI 2230 Systematic calculation of high duty bolted joints
+    year: 2015
+    level: R1
+    how_to_verify: VDI 官网 / 技术图书馆
+  - id: SRC-DIN-25201
+    title: DIN 25201 Design guideline for bolted connections in railway vehicles
+    year: 2019
+    level: R1
+    how_to_verify: DIN 官网（注：面向轨道交通，防松方法可借鉴，不当然适用于其他行业）
+
+rules:
+  - id: RULE-FST-001
+    text: 服役温度低于 -20℃ 的螺栓连接，材料须在该温度下满足规定的冲击吸收能量，不得仅按常温机械性能选材
+    source: SRC-ASTM-A320
+    clause: "待核（标准含低温材料牌号与冲击试验要求）"
+    clause_verified: false
+    level: R0
+    severity_if_fail: reject
+    check: 索取质保书中的低温冲击试验值（试验温度与吸收能量），与标准要求比对；缺试验值即不满足
+    evidence_needed: 材料质保书 + 第三方低温冲击报告（按 GB/T 229 或 ISO 148-1）
+    drives: [DC1]
+
+  - id: RULE-FST-002
+    text: 不锈钢紧固件的性能等级须按耐腐蚀紧固件标准选取，并与其在低温下的韧性一并确认
+    source: SRC-ISO-3506-1
+    clause: "待核（含 A2/A4 与 70/80 等级组合）"
+    clause_verified: false
+    level: R1
+    severity_if_fail: block
+    check: 核对螺栓头部标记或质保书的等级标识（如 A4-70），确认与图纸要求一致
+    evidence_needed: 质保书 + 实物标识照片
+    drives: [DC1]
+
+  - id: RULE-FST-003
+    text: 电镀紧固件须评估氢脆风险，高强度等级不得采用未去氢处理的电镀工艺
+    source: SRC-ISO-4042
+    clause: "待核（含镀层体系与氢脆消除要求）"
+    clause_verified: false
+    level: R1
+    severity_if_fail: block
+    check: 确认镀层体系与是否做去氢处理（温度与时长），核对供应商工艺文件
+    evidence_needed: 供应商工艺说明 + 去氢记录
+    drives: [DC2]
+
+  - id: RULE-FST-004
+    text: 有凝露或盐雾环境的紧固件，其耐蚀性须以中性盐雾试验时长与判定准则表达，不得只写"防腐处理"
+    source: SRC-GBT-10125
+    clause: "待核（含 NSS 试验条件与评级方法）"
+    clause_verified: false
+    level: R0
+    severity_if_fail: reject
+    check: 送第三方做中性盐雾试验，记录出现红锈的时间与评级，与图纸要求比对
+    evidence_needed: 盐雾试验报告（含试验条件、时长、评级）
+    drives: [DC2]
+
+  - id: RULE-FST-005
+    text: 低温服役的连接件须按低温试验方法验证装配后功能，不得仅验证单件材料
+    source: SRC-GBT-2423-1
+    clause: "待核（含试验严酷等级与持续时间）"
+    clause_verified: false
+    level: R0
+    severity_if_fail: reject
+    check: 装配后整体置于试验箱，按设定低温保持规定时长后检查紧固状态与外观
+    evidence_needed: 低温试验记录（温度曲线 + 试验前后检查结果）
+    drives: [DC3]
+
+  - id: RULE-FST-006
+    text: 预紧力矩不得直接引用通用扭矩表，须按连接的实际摩擦状态（干态/镀层/润滑）修正并给出计算
+    source: SRC-VDI-2230
+    clause: "待核（含拧紧系数与摩擦系数取值范围）"
+    clause_verified: false
+    level: R1
+    severity_if_fail: block
+    check: 审查是否给出扭矩计算书，摩擦系数取值是否有依据（实测或标准表 + 工艺状态说明）
+    evidence_needed: 扭矩计算书 + 摩擦系数来源说明
+    drives: [DC4]
+
+  - id: RULE-FST-007
+    text: 振动环境下须指定防松方式，并说明所选方式在服役温度下的有效性
+    source: SRC-DIN-25201
+    clause: "待核（含防松元件分类与试验方法）"
+    clause_verified: false
+    level: R1
+    severity_if_fail: block
+    check: 核对防松元件型号与低温适用性说明；无低温数据时按未验证处理
+    evidence_needed: 防松元件规格书（含温度范围）+ 振动试验或同类工况应用记录
+    drives: [DC3]
+
+  - id: RULE-FST-008
+    text: 不可达部位的紧固件应设二次锁止或防脱落结构，避免单点失效导致部件坠落
+    source: SRC-VDI-2230
+    clause: "待核"
+    clause_verified: false
+    level: R1
+    severity_if_fail: block
+    check: 审查结构图是否存在防脱设计；无则要求补充
+    evidence_needed: 结构图 + 失效模式分析（FMEA 片段）
+    drives: [DC5]

@@ -28,6 +28,7 @@ TEMPLATES = SKILL_ROOT / "assets" / "templates"
 LAYOUT = [
     ("00-原文.md", "00-原文.md"),
     ("00b-领域实例.md", "00b-领域实例.md"),
+    ("00d-场景工况.md", "00d-场景工况.md"),
     ("01-需求规格.md", "01-需求规格.md"),
     ("02-验收标准.md", "02-验收标准.md"),
     ("03-架构方案.md", "03-架构方案.md"),
@@ -35,6 +36,7 @@ LAYOUT = [
     ("05-实现/README.md", "05-实现/README.md"),
     ("06-盲审报告.md", "06-盲审报告.md"),
     ("07-裁决记录.md", "07-裁决记录.md"),
+    ("08-追溯矩阵.md", "08-追溯矩阵.md"),
 ]
 
 # 只有陌生领域才铺取证台账（预设领域不铺，避免误导成"必须填"）
@@ -174,14 +176,22 @@ def main() -> int:
         say("    读 references/core/domain-discovery.md（E0-E3 四级证据）")
         say("    产出 00c-领域取证.md，过 G0.9；取证能力不足则不许进 Stage 1")
         say("    规则：写进 02 的每条判据必须能追到 E0/E1 证据编号，E3 只能当问题不能当判据")
-    say("    —— 领域未确认，不许进入 Stage 1")
+    say("  0c [!] 场景实例化：读 references/core/scenario.md，写 00d-场景工况.md，过 G0.10")
+    say("    SC1-SC8 八槽位 -> OP 工况参数 -> DC 设计约束（挂 RULE-/EV-）")
+    say("    用户给不出参数：分「知识缺口(去查)/输入缺口(登记假设)」，假设上限 S2/M5/L8")
+    say("  0d 规则包：读 references/core/rulepack.md，按场景标签挂 rulepacks/<pack>@<ver>")
+    say("    R0-R3 四级；R3 社区规则只能作建议，不得当拒收判据")
+    say("    —— 领域与场景未确认，不许进入 Stage 1（I11）")
     say("  1. lead 读 00.1 判级，写 07 第 1 节")
-    say("  2. M/L: spec 写 01 + 02（02 前置于架构）")
-    say("  3. 过 G0+G1: python scripts/check_run.py \"%s\" --stage g0|g1" % run_dir)
-    say("  4. architect 写 03 + 04，过 G2")
+    say("  2. M/L: spec 写 01 + 02（02 前置于架构）；每条 R 来源须指向 SC/OP/RULE/假设")
+    say("  3. 过 G0+G0.10+G1: python scripts/check_run.py \"%s\" --stage g0|g1" % run_dir)
+    say("  4. architect 写 03（含规则包引用段）+ 04，过 G2")
     say("  5. builder 写 05-实现/，过自查")
-    say("  6. 起独立子代理盲审（见 references/core/blind-review.md），产出 06")
-    say("  7. lead 判 G3，写 07 第 2/3 节，向用户汇报")
+    say("  6. reviewer 写 08-追溯矩阵（扫四类孤儿，层覆盖 L0-L7）")
+    say("  7. 起独立子代理盲审（见 references/core/blind-review.md），产出 06")
+    say("  8. lead 判 G3，写 07 第 2/3 节，向用户汇报")
+    say("")
+    say("判门禁前先过 anti-bypass.md 的自检三问；发现 B1/B2/B3/B5 -> VOID，不是返工")
     return 0
 
 

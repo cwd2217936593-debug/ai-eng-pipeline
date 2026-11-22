@@ -1,0 +1,30 @@
+# 规则包模板 —— 复制本目录为 <域>-<主题>/ 后填写
+# 完整说明见 references/core/rulepack.md
+# 新建时 clause_verified 一律 false，核一条改一条
+
+pack: hw-example
+version: 0.1.0
+domain: hardware
+applies_to: ["低温"]          # 四域标签：温度×腐蚀×载荷×法规
+maintainer: "<谁负责维护这个包>"
+last_reviewed: 2026-11-22
+notes: "本包仅示范格式，规则内容需自行核实后使用"
+
+sources:
+  - id: SRC-XXX
+    title: "<标准全称，含标准号与年份>"
+    year: 2020
+    level: R0                # R0 强制标准 / R1 行业规范 / R2 企业标准 / R3 社区实践
+    how_to_verify: "<在哪能查到正文：标准库 / 官网 / 供应商质保书引用>"
+
+rules:
+  - id: RULE-XXX-001
+    text: "<一句话说清要求什么，不写'应满足相关要求'这类空话>"
+    source: SRC-XXX
+    clause: "待核"           # 核过后写 "§6.3" 之类
+    clause_verified: false
+    level: R0
+    severity_if_fail: reject # reject / block / advise（R3 只能 advise）
+    check: "<怎么验：查什么、和什么比、谁执行>"
+    evidence_needed: "<要什么材料：质保书 / 试验报告 / 计算书 / 现场记录>"
+    drives: [DC1]            # 对应 00d 的哪条设计约束

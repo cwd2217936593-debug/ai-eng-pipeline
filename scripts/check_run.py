@@ -21,12 +21,14 @@ from pathlib import Path
 LIMITS = {
     "00-原文.md": 5000,
     "00c-领域取证.md": 1500,
+    "00d-场景工况.md": 900,
     "01-需求规格.md": 1200,
     "02-验收标准.md": 900,
     "03-架构方案.md": 1500,
     "04-实施路径.md": 800,
     "06-盲审报告.md": 1000,
     "07-裁决记录.md": 600,
+    "08-追溯矩阵.md": 1000,
 }
 
 BLACKLIST = ["好用", "易用", "友好", "高效", "快速", "稳定", "健壮", "合理", "优雅",
@@ -34,12 +36,14 @@ BLACKLIST = ["好用", "易用", "友好", "高效", "快速", "稳定", "健壮
 
 REQUIRED_SECTIONS = {
     "00c-领域取证.md": ["证据台账", "未取证清单", "架构适配假设", "取证能力"],
+    "00d-场景工况.md": ["场景八槽位", "工况参数", "设计约束", "假设登记"],
     "01-需求规格.md": ["需求清单", "范围边界", "冲突与未决", "假设"],
     "02-验收标准.md": ["判据表"],
     "03-架构方案.md": ["取舍记录", "失败模式", "依赖", "验证路径"],
     "04-实施路径.md": ["步骤"],
     "06-盲审报告.md": ["读过的文件", "攻击点", "问题清单", "AC 证据核对"],
     "07-裁决记录.md": ["判级", "门禁判定"],
+    "08-追溯矩阵.md": ["矩阵", "分层覆盖", "孤儿统计"],
 }
 
 CJK = re.compile(r"[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]")
@@ -68,6 +72,30 @@ def read(path: Path) -> str:
         return ""
 
 
+def split_md_row(line: str) -> list:
+    """按未转义的 | 切分表格行；\\| 视为单元格内容的一部分。"""
+    s = line.strip()
+    if s.startswith("|"):
+        s = s[1:]
+    if s.endswith("|") and not s.endswith("\\|"):
+        s = s[:-1]
+    cells, buf, i = [], [], 0
+    while i < len(s):
+        ch = s[i]
+        if ch == "\\" and i + 1 < len(s) and s[i + 1] == "|":
+            buf.append("|")          # 转义竖线还原为普通字符
+            i += 2
+            continue
+        if ch == "|":
+            cells.append("".join(buf).strip())
+            buf = []
+        else:
+            buf.append(ch)
+        i += 1
+    cells.append("".join(buf).strip())
+    return cells
+
+
 def table_rows(text: str) -> list:
     """取出所有 markdown 表格行，返回单元格列表（已 strip）。"""
     rows = []
@@ -76,8 +104,7 @@ def table_rows(text: str) -> list:
         if s.startswith("|") and s.count("|") >= 2:
             if re.match(r"^\|[\s:\-|]+\|$", s):
                 continue  # 分隔行
-            cells = [c.strip() for c in s.strip("|").split("|")]
-            rows.append(cells)
+            rows.append(split_md_row(s))
     return rows
 
 
@@ -180,7 +207,7 @@ def _section_rows(text: str, keyword: str):
         return []
     rows = []
     for line in lines[1:]:
-        cells = [c.strip() for c in line.strip("|").split("|")]
+        cells = split_md_row(line)
         if cells and all(re.fullmatch(r":?-{2,}:?", c) for c in cells):
             continue
         if all(is_blank(c) for c in cells):
@@ -293,22 +320,168 @@ def check_g09(run: Path, dom: str) -> None:
                 ok("G0.9.6", "AC 判据证据引用一致（%d 处）" % len(refs))
 
 
+# ---------------------------------------------------------------- G0.10 场景门禁
+
+SC_IDS = ("SC1", "SC2", "SC3", "SC4", "SC5", "SC6", "SC7", "SC8")
+PLACEHOLDER = ("待定", "视情况", "根据实际", "待确认", "待补充", "参考行业", "结合具体")
+# N/A 必须带理由：N/A: <理由>
+NA_OK = re.compile(r"^N/?A\s*[:：\-]\s*\S{2,}")
+
+
+def check_g010(run: Path) -> None:
+    """场景门禁（G0.10.1-0.10.8）。参考 references/core/scenario.md。"""
+    p = run / "00d-场景工况.md"
+    if not (p.is_file() and p.stat().st_size > 0):
+        ng("G0.10.0", "缺 00d-场景工况.md（场景未定，不许进 Stage 1 —— I11）")
+        return
+    ok("G0.10.0", "存在 00d-场景工况.md")
+    text = p.read_text(encoding="utf-8", errors="replace")
+
+    # 0.10.1 八槽位
+    rows = _section_rows(text, "场景八槽位") or []
+    got = {}
+    for cells in rows:
+        if cells and cells[0].strip().upper() in SC_IDS:
+            got[cells[0].strip().upper()] = cells[2] if len(cells) > 2 else ""
+    missing = [s for s in SC_IDS if s not in got]
+    if missing:
+        ng("G0.10.1", "槽位缺行 <- %s" % ", ".join(missing))
+    else:
+        bad = []
+        for s in SC_IDS:
+            v = got[s].strip()
+            if not v:
+                bad.append("%s 空" % s)
+            elif v.startswith("N/A") or v.startswith("NA"):
+                if not NA_OK.match(v):
+                    bad.append("%s N/A 无理由" % s)
+            elif any(w in v for w in PLACEHOLDER):
+                bad.append("%s 占位「%s」" % (s, v[:10]))
+        if bad:
+            ng("G0.10.1", "槽位未给具体值 <- %s" % "; ".join(bad[:4]))
+        else:
+            ok("G0.10.1", "SC1-SC8 均已给具体值")
+
+    # 0.10.2 OP 表（至少 3 行含数值；其余可为枚举型，但须标来源）
+    ops = _section_rows(text, "工况参数") or []
+    bad_op, numeric = [], 0
+    for cells in ops:
+        val = cells[2] if len(cells) > 2 else ""
+        src = cells[3] if len(cells) > 3 else ""
+        if not val.strip():
+            bad_op.append("%s 无值" % (cells[0] if cells else "?"))
+        elif not src.strip():
+            bad_op.append("%s 未标来自哪个 SC" % cells[0])
+        elif re.search(r"\d", val):
+            numeric += 1
+    if len(ops) < 3:
+        ng("G0.10.2", "OP 不足 3 行 <- 现有 %d 行" % len(ops))
+    elif bad_op:
+        ng("G0.10.2", "OP 缺值或缺来源 <- %s" % "; ".join(bad_op[:4]))
+    elif numeric < 3:
+        ng("G0.10.2", "OP 含数值的不足 3 行 <- 现有 %d 行（定性描述不是工况参数）" % numeric)
+    else:
+        ok("G0.10.2", "OP %d 行（含数值 %d 行），来源齐全" % (len(ops), numeric))
+
+    # 0.10.3 DC 表挂来源（RULE-/EV-；纯项目自定约束可挂 SC#，但数值型不行）
+    dcs = _section_rows(text, "设计约束") or []
+    NUMERIC = re.compile(r"\d+\s*(mm|cm|℃|°C|%|h|s|min|N·?m|N|Hz|V|A|kg|MPa|次|线)")
+    no_src = []
+    for cells in dcs:
+        src = cells[2] if len(cells) > 2 else ""
+        txt = cells[1] if len(cells) > 1 else ""
+        has_std = bool(re.search(r"RULE-|EV-", src))
+        has_sc = bool(re.search(r"SC\d", src))
+        if not (has_std or has_sc):
+            no_src.append(cells[0] if cells else "?")
+        elif has_sc and not has_std and NUMERIC.search(txt):
+            no_src.append("%s 数值型约束只挂 SC" % cells[0])
+    if len(dcs) < 3:
+        ng("G0.10.3", "DC 不足 3 行 <- 现有 %d 行（经验值不算设计约束）" % len(dcs))
+    elif no_src:
+        ng("G0.10.3", "DC 未挂 RULE-/EV- <- %s" % ", ".join(no_src[:5]))
+    else:
+        ok("G0.10.3", "DC %d 行均挂判据来源" % len(dcs))
+
+    # 0.10.4 DC 有落点 DF
+    no_df = [c[0] for c in dcs if len(c) < 5 or is_blank(c[4])]
+    if dcs and no_df:
+        ng("G0.10.4", "DC 无落点 DF <- %s" % ", ".join(no_df[:5]))
+    elif dcs:
+        ok("G0.10.4", "每条 DC 均有落点 DF")
+
+    # 0.10.5/0.10.6 假设登记
+    ah = _section_rows(text, "假设登记") or []
+    bad_ah = []
+    for cells in ah:
+        if len(cells) < 7:
+            bad_ah.append("%s 列不足 7" % cells[0])
+            continue
+        lv, cost, who, redo = cells[2], cells[4], cells[5], cells[6]
+        if not re.match(r"E[0-3]", lv.strip()):
+            bad_ah.append("%s 依据等级非法" % cells[0])
+        elif not ("偏保守" in cost or "偏冒险" in cost or "无影响" in cost):
+            bad_ah.append("%s 代价未写方向" % cells[0])
+        elif is_blank(who) or is_blank(redo):
+            bad_ah.append("%s 缺谁确认/返工点" % cells[0])
+
+    level = "M"
+    r7 = read(run / "07-裁决记录.md")
+    m = re.search(r"级别\s*[:：]\s*\**\s*([SML])\b", r7)
+    if m:
+        level = m.group(1)
+    cap = {"S": 2, "M": 5, "L": 8}[level]
+
+    if bad_ah:
+        ng("G0.10.5", "假设表不合格 <- %s" % "; ".join(bad_ah[:4]))
+    elif ah:
+        ok("G0.10.5", "假设 %d 条，四列齐" % len(ah))
+    else:
+        gap = re.search(r"输入缺口[^\n]*[:：]\s*([^\n]*)", text)
+        if gap and gap.group(1).strip():
+            ok("G0.10.5", "无假设，且已声明输入缺口 <- %s" % gap.group(1).strip()[:20])
+        else:
+            ng("G0.10.5", "无假设表也未声明「输入缺口: 无」（不许留空当无事）")
+
+    if len(ah) > cap:
+        ng("G0.10.6", "假设 %d 条超 %s 级上限 %d <- 需求没聊清楚，回去问" % (len(ah), level, cap))
+    else:
+        ok("G0.10.6", "假设 %d 条 ≤ %s 级上限 %d" % (len(ah), level, cap))
+
+    # 0.10.7 场景标签
+    m = re.search(r"场景标签[^\n]*", text)
+    tag = m.group(0) if m else ""
+    if tag.count("×") >= 3:
+        ok("G0.10.7", "场景标签已给出（四域）")
+    else:
+        ng("G0.10.7", "场景标签缺失或未用四域组合 <- %r" % tag[:40])
+
+    # 0.10.8 用户确认
+    if re.search(r"- \[[xX]\]\s*G0\.10\.8", text):
+        ok("G0.10.8", "用户已确认场景（G0.10.8 已勾选）")
+    else:
+        ng("G0.10.8", "G0.10.8 未勾选：场景须经用户确认后才能进入 Stage 1")
+
+
 # ---------------------------------------------------------------- 结构
 
 def check_structure(run: Path, stage: str) -> None:
     need = ["00-原文.md"]
+    if stage in ("g0", "g1", "all"):
+        need += ["00d-场景工况.md"]
     if stage in ("g1", "all"):
         need += ["01-需求规格.md", "02-验收标准.md"]
     if stage in ("g2", "all"):
         need += ["03-架构方案.md", "04-实施路径.md"]
     if stage in ("g3", "all"):
-        need += ["06-盲审报告.md", "07-裁决记录.md"]
+        need += ["06-盲审报告.md", "07-裁决记录.md", "08-追溯矩阵.md"]
     for name in need:
         p = run / name
+        cid = "S." + name.split("-")[0].split(".")[0]
         if p.is_file() and p.stat().st_size > 0:
-            ok("S." + name[:2], "存在 %s" % name)
+            ok(cid, "存在 %s" % name)
         else:
-            ng("S." + name[:2], "缺失或为空 %s" % name)
+            ng(cid, "缺失或为空 %s" % name)
 
     if stage in ("g3", "all"):
         impl = run / "05-实现"
@@ -469,6 +642,23 @@ def check_g1(run: Path) -> None:
     else:
         ng("G1.6", "01 范围边界不足 2 条", "当前 %d 条" % len(items))
 
+    # G1.8 需求来源必须能追到工程来源（I11）：SC/OP、RULE-、EV-、[假设A#]
+    # 仅当 00d 存在时启用：没有场景文件说明是 v2 老 run，不追溯加严
+    SRC_OK = re.compile(r"00|SC\d|OP\d|RULE-|EV-|\[?\s*A\d+\s*\]?|假设")
+    has_scene = (run / "00d-场景工况.md").is_file()
+    unsourced = []
+    for cells in table_rows(r1):
+        if cells and re.fullmatch(r"R\d+", cells[0]):
+            src = cells[2] if len(cells) > 2 else ""
+            if src.strip() and not SRC_OK.search(src):
+                unsourced.append("%s:%s" % (cells[0], src[:12]))
+    if not has_scene:
+        ok("G1.8", "不适用（无 00d，按 v2 口径）")
+    elif unsourced:
+        ng("G1.8", "需求来源非工程来源 <- %s" % "; ".join(unsourced[:4]))
+    elif req_ids:
+        ok("G1.8", "需求来源均可追到 SC/OP/RULE/EV/假设")
+
 
 # ---------------------------------------------------------------- G2
 
@@ -539,6 +729,43 @@ def check_g2(run: Path) -> None:
         ng("G2.8", "04 含不可执行步骤词", ",".join(vague))
     elif steps:
         ok("G2.8", "04 无'完善细节'类空步骤")
+
+    # G2.9 规则包引用（仅 00d 存在时启用，避免加严老 run）
+    if not (run / "00d-场景工况.md").is_file():
+        ok("G2.9", "不适用（无 00d，按 v2 口径）")
+        ok("G2.10", "不适用（无 00d，按 v2 口径）")
+        return
+
+    seg_rp = _section_body(r3, "规则包") or ""
+    packs = re.findall(r"@\d+\.\d+\.\d+", seg_rp)  # 表格里 pack 与版本常分两列
+    if not seg_rp.strip():
+        ng("G2.9", "03 缺「规则包引用」段（每条 DC 必须挂 RULE-/EV-）")
+    elif not packs:
+        ng("G2.9", "规则包未锁版本 <- 需写 pack@x.y.z，不许 latest 或裸名")
+    elif re.search(r"@latest|@\*", seg_rp):
+        ng("G2.9", "规则包版本写 latest/*（不可重现）")
+    else:
+        draft = read(run / "00d-场景工况.md")
+        declared = set(re.findall(r"(RULE-[A-Za-z0-9\-]+)", draft))
+        cited = set(re.findall(r"(RULE-[A-Za-z0-9\-]+)", r3))
+        ghost = sorted(cited - declared - set())
+        if ghost and not (run.parent / "rulepacks").is_dir():
+            # 00d 里没声明、也找不到包文件：只提示不判否（包可能在 skill 目录）
+            ok("G2.9", "规则包 %d 个已锁版本；%d 条 RULE 引用待核对" % (len(packs), len(cited)))
+        else:
+            ok("G2.9", "规则包 %d 个已锁版本，RULE 引用 %d 处" % (len(packs), len(cited)))
+
+    # G2.10 分层落点（L2/L3/L4 都要写到，允许合并声明）
+    both = r3 + "\n" + r4
+    miss_layer = [lv for lv in ("L2", "L3", "L4") if not re.search(r"\b%s\b" % lv, both)]
+    if miss_layer:
+        ng("G2.10", "分层缺落点 <- %s（可合并，不可省略）" % ", ".join(miss_layer))
+    elif not re.search(r"\bL5\b|05-实现", r4):
+        ng("G2.10", "04 未映射到 L5（实现）")
+    elif not re.search(r"\bL6\b|验证|测试", r4):
+        ng("G2.10", "04 未映射到 L6（验证）")
+    else:
+        ok("G2.10", "L2-L4 有落点，04 覆盖 L5/L6")
 
 
 # ---------------------------------------------------------------- G3
@@ -630,6 +857,62 @@ def check_g3(run: Path) -> None:
     else:
         ng("G3.6", "07 缺判级记录", "lead 第一个动作是判级")
 
+    # G3.8 追溯矩阵闭合（仅 00d 存在时启用）
+    if not (run / "00d-场景工况.md").is_file():
+        ok("G3.8", "不适用（无 00d，按 v2 口径）")
+        ok("G3.9", "不适用（无 00d，按 v2 口径）")
+        return
+
+    r8 = read(run / "08-追溯矩阵.md")
+    if not r8.strip():
+        ng("G3.8", "缺 08-追溯矩阵.md（全链路未闭合）")
+    else:
+        orph = _section_rows(r8, "孤儿统计") or []
+        nz, closed = [], []
+        for cells in orph:
+            num = cells[1] if len(cells) > 1 else ""
+            tail = " ".join(cells[2:]) if len(cells) > 2 else ""
+            m = re.search(r"\d+", num)
+            if m and int(m.group()) > 0:
+                dm = re.search(r"D\d+", tail)
+                if dm and re.search(re.escape(dm.group()) + r"\s*\|", r7):
+                    # 已裁决：门禁仍判否（I5 布尔），但交付口径为「带缺陷交付」
+                    nz.append("%s=%s@%s" % (cells[0][:8], m.group(), dm.group()))
+                else:
+                    nz.append("%s=%s" % (cells[0][:8], m.group()))
+        layer = _section_rows(r8, "分层覆盖") or []
+        miss_l = []
+        for lv in ("L0", "L1", "L2", "L3", "L4", "L5", "L6", "L7"):
+            row = [c for c in layer if c and c[0].startswith(lv)]
+            if not row or len(row[0]) < 2 or is_blank(row[0][1]):
+                miss_l.append(lv)
+        if nz:
+            ng("G3.8", "追溯矩阵有孤儿 <- %s（带 D# 者结论须标「带缺陷交付」）" % ", ".join(nz))
+        elif miss_l:
+            ng("G3.8", "分层覆盖缺落点 <- %s" % ", ".join(miss_l))
+        elif len(orph) < 5:
+            ng("G3.8", "孤儿统计不足 5 类（需求/设计/未验/无源参数/场景）")
+        else:
+            ok("G3.8", "五类孤儿为 0，L0-L7 全覆盖")
+
+    # G3.9 无绕过痕迹
+    bad = []
+    if re.search(r"VOID-", r7):
+        bad.append("07 有未处置的 VOID 记录")
+    m = re.search(r"级别\s*[:：]\s*\**\s*S\b", r7)
+    r1 = read(run / "01-需求规格.md")
+    n_r = len({c[0] for c in table_rows(r1) if c and re.fullmatch(r"R\d+", c[0])})
+    if m and n_r > 6:
+        bad.append("判 S 但有 %d 条需求（疑似 B7 拆小逃避）" % n_r)
+    ds = [c for c in table_rows(r7) if c and re.fullmatch(r"D\d+", c[0])]
+    incomplete = [c[0] for c in ds if sum(1 for x in c[1:] if not is_blank(x)) < 4]
+    if incomplete:
+        bad.append("裁决不完整 %s（需 主张/理由/裁决/代价/复核）" % ",".join(incomplete[:3]))
+    if bad:
+        ng("G3.9", "存在绕过痕迹 <- %s" % "; ".join(bad))
+    else:
+        ok("G3.9", "无 VOID/无拆小逃避/裁决完整")
+
 
 # ---------------------------------------------------------------- 05
 
@@ -687,6 +970,7 @@ def main() -> int:
     check_structure(run, args.stage)
     if args.stage in ("g0", "all"):
         check_g0(run)
+        check_g010(run)
     check_word_limits(run)
     check_sections(run)
     if args.stage in ("g1", "all"):
