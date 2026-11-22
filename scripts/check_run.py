@@ -568,19 +568,16 @@ def check_g3(run: Path) -> None:
     else:
         ng("G3.1b", "06 未自证读过哪些文件")
 
+    # 逐级别取数：有 `P0=2` 这类显式写法就信它，没有就数问题清单表里的行
     levels = {"P0": 0, "P1": 0, "P2": 0, "P3": 0}
-    found_explicit = False
+    rows_cache = table_rows(r6)
     for lv in levels:
         mm = re.search(lv + r"\s*[=:：]\s*(\d+)", r6)
         if mm:
             levels[lv] = int(mm.group(1))
-            found_explicit = True
-    if not found_explicit:
-        for cells in table_rows(r6):
-            for c in cells:
-                if c in levels:
-                    levels[c] += 1
-                    break
+        else:
+            levels[lv] = sum(1 for cells in rows_cache
+                             if any(c.strip() == lv for c in cells))
     open_bad = levels["P0"] + levels["P1"]
     if open_bad == 0:
         ok("G3.3", "未闭环 P0/P1 = 0")
@@ -608,16 +605,21 @@ def check_g3(run: Path) -> None:
 
     # 无效审查：全 0 问题却无攻击过程
     if levels["P0"] + levels["P1"] + levels["P2"] == 0:
-        atk = 0
-        if "攻击点" in r6:
-            seg2 = section(r6, "攻击点")
-            atk = len([c for c in table_rows(seg2) if c and not is_blank(c[1] if len(c) > 1 else "")])
+        seg_atk = section(r6, "攻击点")
+        # 攻击点可以是表格行、加粗小标题、三级标题或编号列表 —— 不能只认表格
+        atk = len([c for c in table_rows(seg_atk)
+                   if c and len(c) > 1 and not is_blank(c[1])])
+        atk = max(atk, len(re.findall(r"^\s*(?:\*\*[^*\n]{1,30}\*\*|[A-Z]?\d+[\.、)）]\s|#{3,4}\s)", seg_atk, re.M)))
+        # 兜底：节内有 ≥3 处真实执行痕迹（命令行或退出码），也算有攻击过程
+        if atk < 3 and len(re.findall(r"rc=|\$ |Traceback|>>>", seg_atk)) >= 3:
+            atk = 3
         if atk >= 3:
             ok("G3.7", "零问题但有 %d 个攻击点实证" % atk)
         else:
             ng("G3.7", "零问题且攻击点不足 3 个", "判为无效审查")
     else:
-        ok("G3.7", "有问题清单，非空审查")
+        ok("G3.7", "有问题清单，非空审查（P0=%d P1=%d P2=%d）"
+           % (levels["P0"], levels["P1"], levels["P2"]))
 
     if re.search(r"G1\s*\|", r7) or "G1" in r7:
         ok("G3.5", "07 有门禁判定记录")
@@ -644,8 +646,10 @@ def check_impl(run: Path) -> None:
         text = read(p)
         if len(text.splitlines()) > 300:
             bad.append("%s 超 300 行" % p.name)
-        for pat, label in ((r"\bTODO\b|\bFIXME\b", "TODO"), (r"\bNotImplemented(Error)?\b", "未实现"),
-                           (r"^\s*pass\s*$", "空实现 pass")):
+        # "空实现"只认"函数/类体里只有 pass"，不认 except 分支里的 legit pass
+        for pat, label in ((r"\bTODO\b|\bFIXME\b", "TODO"),
+                           (r"\braise\s+NotImplementedError\b", "未实现"),
+                           (r"(?:def\s+\w+\([^)]*\)[^\n]*:|class\s+\w+[^\n]*:)\s*\n\s*(?:#[^\n]*\n\s*)*pass\s*(?:\n|$)", "空实现 pass")):
             if re.search(pat, text, re.M):
                 bad.append("%s:%s" % (p.name, label))
     if bad:
