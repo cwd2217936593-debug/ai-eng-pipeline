@@ -1,0 +1,6 @@
+# 统一 LF，脚本在 Windows 下也能跑
+* text=auto eol=lf
+*.bat eol=crlf
+*.ps1 eol=crlf
+*.png binary
+*.zip binary

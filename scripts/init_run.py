@@ -27,6 +27,7 @@ TEMPLATES = SKILL_ROOT / "assets" / "templates"
 # 需要铺出来的壳：模板相对路径 -> 运行目录内相对路径（None 表示同名）
 LAYOUT = [
     ("00-原文.md", "00-原文.md"),
+    ("00b-领域实例.md", "00b-领域实例.md"),
     ("01-需求规格.md", "01-需求规格.md"),
     ("02-验收标准.md", "02-验收标准.md"),
     ("03-架构方案.md", "03-架构方案.md"),
@@ -78,6 +79,9 @@ def main() -> int:
     ap.add_argument("request", nargs="*", help="需求原文（口语即可，原样落盘）")
     ap.add_argument("--file", dest="req_file", help="从文本文件读取需求原文")
     ap.add_argument("--root", default=".", help="运行目录的父目录，默认当前目录")
+    ap.add_argument("--domain", default="未判",
+                    choices=["software", "hardware", "hr", "custom", "未判"],
+                    help="Stage 0 领域判定，默认未判（由 lead 补全 00b 并经 G0）")
     ap.add_argument("--size", default="未判", choices=["S", "M", "L", "未判"],
                     help="lead 判级结果，默认未判（由 lead 补写 07）")
     ap.add_argument("--no-git", action="store_true", help="不执行 git init")
@@ -111,6 +115,7 @@ def main() -> int:
         "RUN_ID": run_id,
         "DATE": _dt.date.today().isoformat(),
         "ORIGINAL_REQUEST": raw.strip(),
+        "DOMAIN": args.domain,
         "SIZE": args.size,
     }
 
@@ -146,6 +151,7 @@ def main() -> int:
 
     say("")
     say("运行目录: %s" % run_dir)
+    say("领域: %s（Stage 0 需复核并补全 00b）" % args.domain)
     say("判级: %s（由 lead 复核并写入 07）" % args.size)
     say("git: %s" % git_state)
     say("")
@@ -154,12 +160,15 @@ def main() -> int:
         say("  - %s" % item)
     say("")
     say("下一步（按顺序，不许跳）:")
+    say("  0 [Stage 0] lead 判领域、补全 00b-领域实例、过 G0、请用户确认")
+    say("    参考 references/core/stage0-instantiate.md 与 references/domains/%s.md" % args.domain)
+    say("    —— 领域未确认，不许进入 Stage 1")
     say("  1. lead 读 00.1 判级，写 07 第 1 节")
     say("  2. M/L: spec 写 01 + 02（02 前置于架构）")
-    say("  3. 过 G1: python scripts/check_run.py \"%s\"" % run_dir)
+    say("  3. 过 G1: python scripts/check_run.py \"%s\" --stage g1" % run_dir)
     say("  4. architect 写 03 + 04，过 G2")
     say("  5. builder 写 05-实现/，过自查")
-    say("  6. 起 Agent 子代理盲审（见 references/blind-review.md），产出 06")
+    say("  6. 起独立子代理盲审（见 references/core/blind-review.md），产出 06")
     say("  7. lead 判 G3，写 07 第 2/3 节，向用户汇报")
     return 0
 

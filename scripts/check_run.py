@@ -103,6 +103,62 @@ def is_blank(cell: str) -> bool:
     return cell in ("", "__", "—", "N/A", "待填")
 
 
+# ---------------------------------------------------------------- G0 领域门禁
+
+ROLES = ("lead", "spec", "architect", "builder", "reviewer")
+DOMAINS = ("software", "hardware", "hr", "custom")
+
+
+def check_g0(run: Path) -> None:
+    """Stage 0 领域实例的机械可判部分（G0.1/0.3/0.6/0.8）。"""
+    p = run / "00b-领域实例.md"
+    if not (p.is_file() and p.stat().st_size > 0):
+        ng("G0.0", "缺 00b-领域实例.md（Stage 0 未做，不许进入 Stage 1）")
+        return
+    ok("G0.0", "存在 00b-领域实例.md")
+
+    text = p.read_text(encoding="utf-8", errors="replace")
+
+    m = re.search(r"`domain`\s*[:：]\s*`?([A-Za-z]+)`?", text) or \
+        re.search(r"domain\s*[:：]\s*`?([A-Za-z]+)`?", text)
+    dom = (m.group(1).lower() if m else "")
+    if dom in DOMAINS:
+        ok("G0.1", "domain = %s" % dom)
+    else:
+        ng("G0.1", "domain 不合法或未填 <- %r（应为 software/hardware/hr/custom）" % dom)
+
+    found = {}
+    for role in ROLES:
+        row = re.search(r"^\|\s*%s\s*\|(.+)$" % role, text, re.M)
+        if row:
+            found[role] = row.group(1).split("|")[0].strip()
+    missing = [r for r in ROLES if is_blank(found.get(r, ""))]
+    if missing:
+        ng("G0.3", "角色映射缺或未填 <- %s" % ", ".join(missing))
+    else:
+        ok("G0.3", "5 个角色均已映射")
+        if found.get("reviewer") == found.get("builder"):
+            ng("G0.3b", "reviewer 与 builder 同名 <- %s（审查不得由生产者兼任）" % found["reviewer"])
+        else:
+            ok("G0.3b", "reviewer 与 builder 不同")
+
+    sec = re.search(r"##\s*5\.[^\n]*\n(.*?)(?=\n##\s|\Z)", text, re.S)
+    if not sec:
+        ng("G0.6", "找不到第 5 节「攻击面」")
+    else:
+        items = [i for i in re.findall(r"^\s*\d+\.\s*(\S.*)$", sec.group(1), re.M)
+                 if not is_blank(i.strip())]
+        if len(items) >= 5:
+            ok("G0.6", "攻击面 %d 条" % len(items))
+        else:
+            ng("G0.6", "攻击面不足 5 条 <- 现有 %d 条（本领域特有，不得照抄）" % len(items))
+
+    if re.search(r"- \[[xX]\]\s*G0\.8", text):
+        ok("G0.8", "用户已确认（G0.8 已勾选）")
+    else:
+        ng("G0.8", "G0.8 未勾选：领域须经用户确认后才能进入 Stage 1")
+
+
 # ---------------------------------------------------------------- 结构
 
 def check_structure(run: Path, stage: str) -> None:
@@ -482,7 +538,7 @@ def check_impl(run: Path) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description="运行目录机械校验")
     ap.add_argument("run", help="run 目录路径")
-    ap.add_argument("--stage", default="all", choices=["g1", "g2", "g3", "all"])
+    ap.add_argument("--stage", default="all", choices=["g0", "g1", "g2", "g3", "all"])
     args = ap.parse_args()
 
     run = Path(args.run).expanduser().resolve()
@@ -491,6 +547,8 @@ def main() -> int:
         return 2
 
     check_structure(run, args.stage)
+    if args.stage == "g0":
+        check_g0(run)
     check_word_limits(run)
     check_sections(run)
     if args.stage in ("g1", "all"):
