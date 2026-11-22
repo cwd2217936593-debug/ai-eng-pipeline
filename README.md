@@ -106,12 +106,30 @@ ai-eng-pipeline/
 
 ## 加一个新领域
 
-1. 复制 `references/domains/_template.md` 为 `your-domain.md`
+**两条路，先分清要哪条：**
+
+**A. 沉淀成领域包**（这个领域你会反复用）
+
+1. 复制 `references/domains/_template.md` 为 `references/domains/<domain>.md`
 2. 填 8 个槽位（交付实体 / 验证方式 / 方案载体 / 攻击面 / 角色映射 / 合规 / 判定用语 / 判级门槛）
 3. 确认没有违反任何不变量
-4. 在 `stage0-instantiate.md` 的信号表里加你的关键词
+4. 在 `references/core/stage0-instantiate.md` 的信号表里加你的关键词
 
 不需要改任何核心文件。这是领域可插拔的意义。
+
+**B. 一次性陌生领域**（这个领域你可能只做一次）
+
+不要建领域包。走 `references/core/domain-discovery.md`：
+
+1. 判 `domain: custom`
+2. 三级通道取证（用户材料 / 联网检索 / 模型知识只产问题），证据分 E0-E3
+3. 写 `00c-领域取证.md`（证据台账 / 未取证清单 / 架构适配假设 / 取证能力声明）
+4. 按 `00b` 的槽位填，但槽位 2/4/6/7 必须引 `[EV-xx]`
+5. 过 G0.9 才能进 Stage 1
+
+**为什么要有 B 这条路**：编造的行业规范、公差等级、合规条款不会有任何东西报错 ——
+软件里编造的 API 会被 import 拦下，建筑里编造的 GB 号会一路走到施工。
+E3（模型自身知识）被强制显性化成"待确认问题"，是这条路上唯一的防线。
 
 ## 版本策略
 

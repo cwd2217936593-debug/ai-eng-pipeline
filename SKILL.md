@@ -11,8 +11,9 @@ agent_created: true
 把一句口语化的需求，走成一套可验收、可追溯、可回滚的交付物。
 与普通"帮我做个东西"的根本区别：**先定"这次要用哪套标准"，再开始干活。**
 
-领域：`software` 软件 / `hardware` 硬件 / `hr` 人力与制度 / `custom` 自定义。
+领域：`software` 软件 / `hardware` 硬件 / `hr` 人力与制度 / `custom` 陌生领域。
 领域只改变"怎么验证"，不改变"必须有验证"。
+**陌生领域（建筑、机械、医疗、法律、物流…）不是不支持，是要先取证**：编造的行业规范不会有任何东西报错，所以判据必须追到证据编号。
 
 ## 2. 触发与不触发
 
@@ -28,7 +29,10 @@ agent_created: true
 输入：用户口语需求
    |
 === Stage 0 · 领域实例化（AI 用得少，决策最重）===
-   |  lead 识别领域 -> 读 domains/<x>.md -> 写 00b-领域实例.md
+   |  lead 识别领域 -> 命中预设包 domains/<x>.md
+   |    `-- custom（陌生领域）-> 取证 E0-E3 -> 写 00c -> G0.9
+   |         `-- 取证能力不足 -> 停下，向用户索取材料或确认豁免
+   |  写 00b-领域实例.md
    |  G0 --否--> 重写 00b（领域错了后面全废）
    |  用户确认
 === Stage 1+ · 施工（按 00b 实例化角色）===
@@ -47,11 +51,12 @@ agent_created: true
 ## 4. 每阶段动作
 
 **开工**：`python scripts/init_run.py "<需求原文>" --domain software --root .`
-建运行目录与 8 份空壳（含 git init）。
+建运行目录与 9 份空壳（`custom` 额外铺 `00c`，含 git init）。
 
 | 阶段 | 动作 | 读哪个 reference |
 |---|---|---|
-| 0 领域 | 判领域、填 7 槽位、写 `00b`、请用户确认 | `references/core/stage0-instantiate.md` + `domains/<x>.md` |
+| 0 领域 | 判领域、填 8 槽位、写 `00b`、请用户确认 | `references/core/stage0-instantiate.md` + `domains/<x>.md` |
+| 0b 取证 | **仅 custom**：三级通道取证、写 `00c`、过 G0.9 | `references/core/domain-discovery.md` |
 | 判级 | 判 S/M/L，写 `07` 第 1 节；模糊则升一级 | `references/core/sizing.md` |
 | 需求 | 拆 R、写 AC（输入→动作→可观测输出）、划边界、报冲突 | `references/roles/spec.md` + `references/core/contracts.md` §2-3 |
 | 方案 | 从 AC 倒推、取舍三段式、失败模式、排步骤 | `references/roles/architect.md` + `references/core/contracts.md` §4-5 |
@@ -73,6 +78,7 @@ agent_created: true
 ## 5. 门禁摘要
 
 - **G0 领域**：标识明确 / 5 角色映射齐 / 攻击面 ≥5 条且本领域特有 / 用户已确认
+- **G0.9 取证**（仅 custom）：四节齐 / AC 判据追得到 E0/E1 / 无 E3 当判据 / 未取证清单非空 / 取证能力已声明
 - **G1 需求**：每条 R 可追溯 / 每条 AC 可判真假 / 边界清晰 / 无未决冲突 / 无不可测词
 - **G2 方案**：取舍有放弃项+理由+代价 / 失败模式 ≥2 / 每个 AC 有验证路径 / 依赖已确认
 - **G3 交付**：盲审 blinded 且 P0=P1=0 / 每条 AC 有证据 / 变更已提交 / 遗留已登记

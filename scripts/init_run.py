@@ -37,6 +37,9 @@ LAYOUT = [
     ("07-裁决记录.md", "07-裁决记录.md"),
 ]
 
+# 只有陌生领域才铺取证台账（预设领域不铺，避免误导成"必须填"）
+LAYOUT_CUSTOM = [("00c-领域取证.md", "00c-领域取证.md")]
+
 
 def say(msg: str = "") -> None:
     try:
@@ -120,7 +123,10 @@ def main() -> int:
     }
 
     created = []
-    for src_rel, dst_rel in LAYOUT:
+    layout = list(LAYOUT)
+    if args.domain in ("custom", "未判"):
+        layout += LAYOUT_CUSTOM
+    for src_rel, dst_rel in layout:
         src = TEMPLATES / src_rel
         dst = run_dir / dst_rel
         if not src.exists():
@@ -145,7 +151,7 @@ def main() -> int:
                 "-c", "user.name=ai-eng-pipeline",
                 "-c", "user.email=pipeline@local",
                 "commit", "-q", "-m",
-                "chore(run): 初始化 %s 骨架（8 份产物空壳）" % run_id,
+                "chore(run): 初始化 %s 骨架（%d 份产物空壳）" % (run_id, len(created)),
             ], run_dir)
             git_state = "committed" if code == 0 else "commit-skipped"
 
@@ -161,11 +167,17 @@ def main() -> int:
     say("")
     say("下一步（按顺序，不许跳）:")
     say("  0 [Stage 0] lead 判领域、补全 00b-领域实例、过 G0、请用户确认")
-    say("    参考 references/core/stage0-instantiate.md 与 references/domains/%s.md" % args.domain)
+    ref = "_template" if args.domain in ("custom", "未判") else args.domain
+    say("    参考 references/core/stage0-instantiate.md 与 references/domains/%s.md" % ref)
+    if args.domain in ("custom", "未判"):
+        say("  0b [!] 陌生领域：先取证再填槽位")
+        say("    读 references/core/domain-discovery.md（E0-E3 四级证据）")
+        say("    产出 00c-领域取证.md，过 G0.9；取证能力不足则不许进 Stage 1")
+        say("    规则：写进 02 的每条判据必须能追到 E0/E1 证据编号，E3 只能当问题不能当判据")
     say("    —— 领域未确认，不许进入 Stage 1")
     say("  1. lead 读 00.1 判级，写 07 第 1 节")
     say("  2. M/L: spec 写 01 + 02（02 前置于架构）")
-    say("  3. 过 G1: python scripts/check_run.py \"%s\" --stage g1" % run_dir)
+    say("  3. 过 G0+G1: python scripts/check_run.py \"%s\" --stage g0|g1" % run_dir)
     say("  4. architect 写 03 + 04，过 G2")
     say("  5. builder 写 05-实现/，过自查")
     say("  6. 起独立子代理盲审（见 references/core/blind-review.md），产出 06")

@@ -16,8 +16,9 @@
 1. `SKILL.md` —— 主流程（约 2000 字）。**必读。**
 2. `references/core/invariants.md` —— 9 条不变量。**必读**，违反任何一条流程就失效。
 3. `references/core/stage0-instantiate.md` —— 第一段怎么定领域。
-4. `references/domains/<domain>.md` —— 当前任务的领域包（software / hardware / hr / custom）。
-5. 干活时按需读：`references/core/contracts.md`（产物契约）、`references/core/gates.md`（门禁）、`references/core/blind-review.md`（审查协议）、`references/roles/*.md`（角色卡）。
+4. `references/domains/<domain>.md` —— 当前任务的领域包（software / hardware / hr / _template）。
+5. **若是陌生领域**（不在上面三个内，如建筑/机械/医疗/法律/物流）：必读 `references/core/domain-discovery.md`，先取证再填 `00b`，产出 `00c`。
+6. 干活时按需读：`references/core/contracts.md`（产物契约）、`references/core/gates.md`（门禁）、`references/core/blind-review.md`（审查协议）、`references/roles/*.md`（角色卡）。
 
 不要一次性全读。按阶段加载，避免上下文被塞满。
 
@@ -25,10 +26,15 @@
 
 ```
 Stage 0  定领域、定角色、定验证方式  →  产出 00b-领域实例.md  →  G0  →  用户确认
+         └ 陌生领域：取证 E0-E3 → 00c-领域取证.md → G0.9 →（取证能力不足则停下）
 Stage 1+ 拆需求、定验收、出方案、产出实体、独立盲审  →  G1/G2/G3  →  交付
 ```
 
 **Stage 0 是不可跳过的。** 跳过它，你会用"软件的验证方式"去审一份硬件方案或人力资源制度，产出正确的废话。
+
+**陌生领域不能凭印象填。** 编造的规范号、公差等级、合规条款不会有任何东西报错 ——
+这是整套流程里唯一"错了也没人发现"的失败模式。所以陌生领域的 AC 判据必须追到
+证据编号（E0/E1），模型自己的知识（E3）只能用来提问题，不能当判据。
 
 ## 五个动作要点
 

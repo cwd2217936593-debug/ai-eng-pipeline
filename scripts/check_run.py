@@ -20,6 +20,7 @@ from pathlib import Path
 
 LIMITS = {
     "00-原文.md": 5000,
+    "00c-领域取证.md": 1500,
     "01-需求规格.md": 1200,
     "02-验收标准.md": 900,
     "03-架构方案.md": 1500,
@@ -32,6 +33,7 @@ BLACKLIST = ["好用", "易用", "友好", "高效", "快速", "稳定", "健壮
              "灵活", "尽量", "适当", "较好", "基本满足", "等等", "若干", "大量"]
 
 REQUIRED_SECTIONS = {
+    "00c-领域取证.md": ["证据台账", "未取证清单", "架构适配假设", "取证能力"],
     "01-需求规格.md": ["需求清单", "范围边界", "冲突与未决", "假设"],
     "02-验收标准.md": ["判据表"],
     "03-架构方案.md": ["取舍记录", "失败模式", "依赖", "验证路径"],
@@ -157,6 +159,138 @@ def check_g0(run: Path) -> None:
         ok("G0.8", "用户已确认（G0.8 已勾选）")
     else:
         ng("G0.8", "G0.8 未勾选：领域须经用户确认后才能进入 Stage 1")
+
+    check_g09(run, dom)
+
+
+def _section_body(text: str, keyword: str):
+    """取某个标题（2-4 级）下的正文，止于下一个任意级别标题。"""
+    m = re.search(r"#{2,4}[^\n]*" + re.escape(keyword) + r"[^\n]*\n(.*?)(?=\n#{1,4}\s|\Z)",
+                  text, re.S)
+    return m.group(1) if m else None
+
+
+def _section_rows(text: str, keyword: str):
+    """取某节下 markdown 表格的数据行（去掉表头与分隔行，过滤空模板行）。"""
+    body = _section_body(text, keyword)
+    if body is None:
+        return None
+    lines = [l.strip() for l in body.splitlines() if l.strip().startswith("|")]
+    if len(lines) < 2:
+        return []
+    rows = []
+    for line in lines[1:]:
+        cells = [c.strip() for c in line.strip("|").split("|")]
+        if cells and all(re.fullmatch(r":?-{2,}:?", c) for c in cells):
+            continue
+        if all(is_blank(c) for c in cells):
+            continue
+        rows.append(cells)
+    return rows
+
+
+def _has_real_ac(text: str) -> bool:
+    """判据表里是否已有真正填写过的 AC 行（空模板行不算）。"""
+    for cells in _section_rows(text, "判据表") or []:
+        if len(cells) >= 4 and re.match(r"AC[\w-]+", cells[0]) \
+                and not is_blank(cells[2]) and not is_blank(cells[3]):
+            return True
+    return False
+
+
+def check_g09(run: Path, dom: str) -> None:
+    """陌生领域取证门禁（仅 domain=custom 时生效）。"""
+    if dom != "custom":
+        ok("G0.9", "不适用（domain=%s，走预设领域包）" % (dom or "未判"))
+        return
+
+    p = run / "00c-领域取证.md"
+    if not (p.is_file() and p.stat().st_size > 0):
+        ng("G0.9.0", "domain=custom 但缺 00c-领域取证.md（陌生领域未取证，不许进 Stage 1）")
+        return
+    ok("G0.9.0", "存在 00c-领域取证.md")
+
+    text = p.read_text(encoding="utf-8", errors="replace")
+
+    # G0.9.1 四节齐全
+    need = ("证据台账", "未取证清单", "架构适配假设", "取证能力")
+    miss = [k for k in need if _section_body(text, k) is None]
+    if miss:
+        ng("G0.9.1", "00c 缺节 <- %s" % "、".join(miss))
+    else:
+        ok("G0.9.1", "四节齐全（台账/未取证/适配假设/取证能力）")
+
+    # G0.9.2 台账有数据且等级合法
+    rows = _section_rows(text, "证据台账") or []
+    if not rows:
+        ng("G0.9.2", "证据台账无数据行（一份为空台账的取证等于没取证）")
+    else:
+        bad = []
+        for cells in rows:
+            lv = cells[1] if len(cells) > 1 else ""
+            if not re.match(r"E[0-3]\b", lv):
+                bad.append(lv or "(空)")
+        if bad:
+            ng("G0.9.2", "台账等级不合法 <- %s（只允许 E0/E1/E2/E3）" % ", ".join(bad[:3]))
+        else:
+            ok("G0.9.2", "台账 %d 行，等级均合法" % len(rows))
+
+    # G0.9.3 E1 必须可核验（含条号或标准年份）
+    e1 = [c for c in rows if len(c) > 1 and c[1].startswith("E1")]
+    if not e1:
+        ng("G0.9.3", "无 E1 证据：陌生领域的 AC 判据必须能追到可核验标准")
+    else:
+        weak = [c[0] for c in e1
+                if not (re.search(r"第\s*[\d.]+\s*条", " ".join(c)) or re.search(r"(19|20)\d{2}", " ".join(c)))]
+        if weak:
+            ng("G0.9.3", "E1 缺条号或年份 <- %s（写不出条号应降级为 E2）" % ", ".join(weak[:3]))
+        else:
+            ok("G0.9.3", "E1 证据 %d 条，均可核验" % len(e1))
+
+    # G0.9.4 未取证清单非空（诚实性检查）
+    unv = _section_rows(text, "未取证清单")
+    if unv is None:
+        ng("G0.9.4", "找不到未取证清单")
+    elif not unv:
+        ng("G0.9.4", "未取证清单为空：陌生领域必然存在未核实的推测，空清单说明取证在自欺")
+    else:
+        ok("G0.9.4", "未取证清单 %d 条" % len(unv))
+
+    # G0.9.5 取证能力声明（未替换的 <占位符> 视为未填）
+    c04 = _section_body(text, "取证能力") or ""
+    m = re.search(r"取证能力\s*[:：]\s*([^\n]+)", c04)
+    cap = m.group(1).strip() if m else ""
+    if not cap or "<" in cap or "未填" in cap or "待定" in cap:
+        ng("G0.9.5", "未声明取证能力 <- %r（须写明 联网+知识库/仅联网/仅知识库/无）" % cap[:30])
+    elif re.fullmatch(r"无[。.]?", cap):
+        # 只看「未覆盖」字段，不在全文搜关键词 —— 模板本身含"用户已接受豁免"字样，全文搜会假通过
+        m2 = re.search(r"未覆盖\s*[:：]\s*([^\n]+)", c04)
+        uncov = m2.group(1).strip() if m2 else ""
+        if "<" not in uncov and "用户已接受豁免" in uncov and "原话" in uncov:
+            ok("G0.9.5", "取证能力=无，用户豁免已记录")
+        else:
+            ng("G0.9.5", "取证能力为『无』但未覆盖字段未记录用户豁免原话（不许把推测当规范用）")
+    else:
+        ok("G0.9.5", "取证能力已声明 <- %s" % cap[:30])
+
+    # G0.9.6 证据引用一致性（AC 尚未写时不判，由 G1 阶段复查）
+    ac = run / "02-验收标准.md"
+    if ac.is_file():
+        atext = ac.read_text(encoding="utf-8", errors="replace")
+        if not _has_real_ac(atext):
+            ok("G0.9.6", "02 尚未写 AC（进入 Stage 1 后由 G1 复查证据引用）")
+        elif re.search(r"\[E3[-\]]", atext):
+            ng("G0.9.6", "02 的判据里出现 [E3]（模型推测不得作验收判据）")
+        else:
+            ids = set(re.findall(r"\|\s*(EV-\d+)\s*\|", text))
+            refs = set(re.findall(r"(EV-\d+)", atext))
+            ghost = sorted(refs - ids)
+            if ghost:
+                ng("G0.9.6", "02 引用了不存在的证据 <- %s" % ", ".join(ghost[:5]))
+            elif not refs:
+                ng("G0.9.6", "02 的 AC 判据未引用任何 EV 编号（陌生领域判据必须可溯源）")
+            else:
+                ok("G0.9.6", "AC 判据证据引用一致（%d 处）" % len(refs))
 
 
 # ---------------------------------------------------------------- 结构
@@ -547,7 +681,7 @@ def main() -> int:
         return 2
 
     check_structure(run, args.stage)
-    if args.stage == "g0":
+    if args.stage in ("g0", "all"):
         check_g0(run)
     check_word_limits(run)
     check_sections(run)
