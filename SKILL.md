@@ -15,6 +15,9 @@ agent_created: true
 领域只改变"怎么验证"，不改变"必须有验证"。
 **陌生领域（建筑、机械、医疗、法律、物流…）不是不支持，是要先取证**：编造的行业规范不会有任何东西报错，所以判据必须追到证据编号。
 
+**需求方可以不懂行（I12）**：不懂不是缺陷，是常态。由领域包的专业提问框架替用户问、替用户翻译，
+再由独立领域专家复核——不许要求用户"先懂行再来提需求"。
+
 ## 2. 触发与不触发
 
 **触发**：帮我做个 XX / 这个需求怎么落地 / 评估一下这个功能怎么做 / 做个完整方案 / 把这个功能从头做完 / 我想加个功能但没想清楚 / 帮我把这个想法做成能用的东西 / 帮我设计一套制度或流程
@@ -37,6 +40,8 @@ agent_created: true
    |    `-- 用户给不出参数 -> 分「知识缺口/输入缺口」-> 假设登记（有上限）
    |  挂规则包 rulepacks/<pack>@<ver>
    |  写 00a-意图主线.md（提炼一条冻结的锚点，I0 最高优先级）
+   |  写 00e-需求澄清.md（用领域包槽位10框架提问，翻译用户口语，I12）
+   |    `-- 委派独立领域专家复核 -> 写 00f-专业复核.md（I12）
    |  G0 + G0.10 --否--> 重写 00b/00d（领域或场景错了后面全废）
    |  用户确认
 === Stage 1+ · 施工（按 00b 实例化角色，按 L0-L7 往下走）===
@@ -68,6 +73,9 @@ agent_created: true
 | 0b 取证 | **仅 custom**：三级通道取证、写 `00c`、过 G0.9 | `references/core/domain-discovery.md` |
 | 0c 场景 | 填 SC1–SC8、推 OP、定 DC、登记假设、写 `00d`、过 G0.10 | `references/core/scenario.md` |
 | 0d 规则 | 按场景标签挂 `rulepacks/<pack>@<ver>`，裁剪后写入 `00b` | `references/core/rulepack.md` |
+| 0e 澄清 | 用领域包槽位10框架提问、翻译用户口语、写 `00e`（I12） | `references/core/intake-bridge.md` |
+| 0f 专家 | 委派独立领域专家复核、写 `00f`（I12） | `references/core/intake-bridge.md` + `roles/domain-expert.md` |
+| 编排 | 多 AI 自动启动/分派/回收的调度协议 | `references/core/orchestration.md` |
 | 判级 | 判 S/M/L，写 `07` 第 1 节；模糊则升一级 | `references/core/sizing.md` |
 | 需求 | 拆 R、写 AC（输入→动作→可观测输出）、划边界、报冲突 | `references/roles/spec.md` + `references/core/contracts.md` §2-3 |
 | 方案 | 从 AC 倒推、取舍三段式、失败模式、排步骤 | `references/roles/architect.md` + `references/core/contracts.md` §4-5 |
@@ -82,9 +90,10 @@ agent_created: true
 1. **意图先于一切（I0）**：Stage 0 先提炼一条冻结的意图主线，每个产物头部回指它。回指不上即偏移。
 2. **下游只读文件，不读对话**。产物必须落盘，靠对话传递的理解 5 环后偏差约 40%。
 3. **architect 不读 00，reviewer 不读 03**。前者保证"验收标准够不够用"被真检验，后者保证审查不给作者找理由。
-4. **lead 只做三件事**：判级、选链、裁决。一干具体活就成幻觉源。
+4. **lead 只做五件事**：提炼主线、提问澄清、判级、选链、裁决。一干具体活就成幻觉源。
 5. **领域与场景都不能边干边换**。判错就回 Stage 0，`01`–`03` 作废，`07` 记裁决。
-6. **不变量不能因领域而变**。见 `references/core/invariants.md` 的 I0–I11。
+6. **需求方可以不懂行（I12）**：由领域包槽位 10 的框架替用户提问，翻译留痕，独立领域专家复核。不许要求用户"先懂行再提需求"。
+7. **不变量不能因领域而变**。见 `references/core/invariants.md` 的 I0–I12。
 
 第六条规定动作：**判"是"之前先自问三句**（可复现吗 / 判否我会损失什么 / 我是不是早就知道答案）。
 详见 `references/core/anti-bypass.md`。绕过形态 B1–B7 里，B1/B2/B3/B5 判 `VOID`，不是返工。
@@ -97,6 +106,7 @@ agent_created: true
 - **G0 领域**：标识明确 / 5 角色映射齐 / 攻击面 ≥5 条且本领域特有 / 用户已确认
 - **G0.9 取证**（仅 custom）：四节齐 / AC 判据追得到 E0/E1 / 无 E3 当判据 / 未取证清单非空
 - **G0.10 场景**：SC1–SC8 有值 / OP ≥3 带单位 / DC ≥3 挂 RULE 或 EV / 假设四列齐且不超上限 / 用户已确认
+- **G0.11 澄清与专业复核**（I12）：`00e` 澄清记录非空且三列齐 / `00f` 复核结论非空且非"通过"则有清单
 - **G1 需求**：每条 R 可追溯（到 SC/OP/RULE/假设）/ 每条 AC 可判真假 / 边界清晰 / 无未决冲突
 - **G2 方案**：取舍有放弃项+理由+代价 / 失败模式 ≥2 / 每个 AC 有验证路径 / 规则包锁版本且无 R3 当判据 / L2–L4 有落点
 - **G3 交付**：盲审 blinded 且 P0=P1=0 / 每条 AC 有证据 / 追溯矩阵五类孤儿为 0 / 无绕过痕迹 / 遗留已登记
@@ -136,11 +146,13 @@ agent_created: true
 
 | 想问什么 | 看哪里 |
 |---|---|
-| 哪些规则绝不能变 | `references/core/invariants.md`（I0–I11） |
+| 哪些规则绝不能变 | `references/core/invariants.md`（I0–I12） |
 | 这次用什么标准验证 | `references/core/stage0-instantiate.md` + `domains/` |
 | 这个场景该怎么设计 | `references/core/scenario.md` |
 | 合格线在哪、出处是什么 | `references/core/rulepack.md` + `rulepacks/` |
 | 陌生行业怎么取证 | `references/core/domain-discovery.md` |
+| 需求方不懂行怎么办 | `references/core/intake-bridge.md`（I12） |
+| 多 AI 怎么自动跑起来 | `references/core/orchestration.md` |
 | 从头到尾每层做什么 | `references/core/e2e-spine.md` |
 | 怎么防止它糊弄过去 | `references/core/anti-bypass.md` |
 | 每道门禁查什么 | `references/core/gates.md` |

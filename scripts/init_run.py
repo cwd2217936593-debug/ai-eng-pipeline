@@ -30,6 +30,8 @@ LAYOUT = [
     ("00a-意图主线.md", "00a-意图主线.md"),
     ("00b-领域实例.md", "00b-领域实例.md"),
     ("00d-场景工况.md", "00d-场景工况.md"),
+    ("00e-需求澄清.md", "00e-需求澄清.md"),
+    ("00f-专业复核.md", "00f-专业复核.md"),
     ("01-需求规格.md", "01-需求规格.md"),
     ("02-验收标准.md", "02-验收标准.md"),
     ("03-架构方案.md", "03-架构方案.md"),
@@ -183,9 +185,13 @@ def main() -> int:
     say("  0d 规则包：读 references/core/rulepack.md，按场景标签挂 rulepacks/<pack>@<ver>")
     say("    R0-R3 四级；R3 社区规则只能作建议，不得当拒收判据")
     say("    —— 领域与场景未确认，不许进入 Stage 1（I11）")
+    say("  0e 澄清（I12）：读 references/core/intake-bridge.md，用领域包槽位10框架提问")
+    say("    把「用户口语 -> 专业含义 -> 据此追问」记进 00e-需求澄清.md，原话逐字保留")
+    say("  0f 专家复核（I12）：委派独立领域专家（roles/domain-expert.md），产出 00f-专业复核.md")
+    say("    翻译者≠复核者；无子代理环境如实标 unblinded，不许假装独立")
     say("  1. lead 读 00.1 判级，写 07 第 1 节")
     say("  2. M/L: spec 写 01 + 02（02 前置于架构）；每条 R 来源须指向 SC/OP/RULE/假设")
-    say("  3. 过 G0+G0.10+G1: python scripts/check_run.py \"%s\" --stage g0|g1" % run_dir)
+    say("  3. 过 G0+G0.10+G0.11+G1: python scripts/check_run.py \"%s\" --stage g0|g1" % run_dir)
     say("  4. architect 写 03（含规则包引用段）+ 04，过 G2")
     say("  5. builder 写 05-实现/，过自查")
     say("  6. reviewer 写 08-追溯矩阵（扫四类孤儿，层覆盖 L0-L7）")

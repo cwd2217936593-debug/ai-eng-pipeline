@@ -14,7 +14,7 @@
 按顺序，读到够用就停：
 
 1. `SKILL.md` —— 主流程（约 2000 字）。**必读。**
-2. `references/core/invariants.md` —— 12 条不变量。**必读**，违反任何一条流程就失效。
+2. `references/core/invariants.md` —— 13 条不变量。**必读**，违反任何一条流程就失效。
 3. `references/core/stage0-instantiate.md` —— 第一段怎么定领域。
 4. `references/domains/<domain>.md` —— 当前任务的领域包（software / hardware / hr / _template）。
 5. `references/core/scenario.md` —— 场景实例化（SC→OP→DC）。**和领域包同等重要**：
@@ -22,7 +22,8 @@
 6. **若是陌生领域**（不在上面三个内，如建筑/机械/医疗/法律/物流）：必读 `references/core/domain-discovery.md`，先取证再填 `00b`，产出 `00c`。
 7. `references/core/rulepack.md` —— 规则包协议。要把"符合行业规范"换成"符合 RULE-xxx，出处某标准某条"。
    注意：GitHub 上的 checklist 属 R3，**只能提建议，不能当拒收判据**。
-8. 干活时按需读：`references/core/contracts.md`（产物契约）、`references/core/gates.md`（门禁）、`references/core/e2e-spine.md`（L0-L7 与追溯矩阵）、`references/core/anti-bypass.md`（防绕过）、`references/core/blind-review.md`（审查协议）、`references/roles/*.md`（角色卡）。
+8. `references/core/intake-bridge.md` —— 需求方不懂行怎么办（I12）：专业提问框架 + 翻译留痕 + 领域专家复核。
+9. 干活时按需读：`references/core/contracts.md`（产物契约）、`references/core/gates.md`（门禁）、`references/core/e2e-spine.md`（L0-L7 与追溯矩阵）、`references/core/anti-bypass.md`（防绕过）、`references/core/blind-review.md`（审查协议）、`references/core/orchestration.md`（多 AI 编排）、`references/roles/*.md`（角色卡）。
 
 不要一次性全读。按阶段加载，避免上下文被塞满。
 
@@ -31,7 +32,8 @@
 ```
 Stage 0  先提炼意图主线、再定领域、定场景、定角色、定验证方式
          →  产出 00a-意图主线.md（冻结锚点）+ 00b-领域实例.md + 00d-场景工况.md
-         →  I0 + G0 + G0.10  →  用户确认
+         →  用领域包槽位10框架提问澄清 → 00e-需求澄清.md → 领域专家复核 → 00f-专业复核.md
+         →  I0 + I12 + G0 + G0.10  →  用户确认
          └ 陌生领域：取证 E0-E3 → 00c-领域取证.md → G0.9 →（取证能力不足则停下）
          └ 挂规则包：按场景标签选 rulepacks/<pack>@<ver>
 Stage 1+ 拆需求、定验收、出方案、产出实体、独立盲审
@@ -44,6 +46,10 @@ Stage 1+ 拆需求、定验收、出方案、产出实体、独立盲审
 **意图主线（I0）是最先做的。** 从用户原话提炼一条冻结的锚点（一句话说清"用户要解决的问题 + 成功标志"，
 不含方案），每个产物头部都要回指它。回指不上 = 主线偏了。这是门禁查不了的"方向"，只能靠锚点锁。
 详见 `references/core/intent-anchor.md`。
+
+**需求方可以不懂行（I12）。** 不懂是常态，不是缺陷。用领域包槽位 10 的专业提问框架替用户问、
+替用户翻译，再由独立领域专家复核——不许要求用户"先懂行再来提需求"。
+详见 `references/core/intake-bridge.md`。
 
 **陌生领域不能凭印象填。** 编造的规范号、公差等级、合规条款不会有任何东西报错 ——
 这是整套流程里唯一"错了也没人发现"的失败模式。所以陌生领域的 AC 判据必须追到
@@ -61,6 +67,8 @@ Stage 1+ 拆需求、定验收、出方案、产出实体、独立盲审
    第三问答"是"即为确认偏误，该条判否。详见 `references/core/anti-bypass.md`。
 7. **用户给不出参数很正常。** 分「知识缺口（去查）/ 输入缺口（登记假设）」，
    假设必须给具体值 + 若错代价与方向 + 谁确认 + 返工点，且数量有上限。**不许编一个数然后当它有依据。**
+8. **用户不懂行很正常（I12）。** 用领域包槽位 10 的专业提问框架替用户问，翻译留痕，独立专家复核。
+   翻译者 ≠ 复核者。
 
 ## 盲审在你的平台上怎么做
 
@@ -94,5 +102,5 @@ python scripts/bump.py --run <目录> --type feat --scope build --message "..." 
 
 ## 版本
 
-当前内核 `v2.x`。不变量变更 = MAJOR。领域包可独立演进 = MINOR。
+当前内核 `v3.x`。不变量变更 = MAJOR。领域包可独立演进 = MINOR。
 详见 `VERSION` 与 `CHANGELOG.md`。

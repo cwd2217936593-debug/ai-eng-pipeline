@@ -176,6 +176,23 @@ def inj_empty_anchor(d: Path):
     p.write_text(t, encoding="utf-8")
 
 
+def inj_intake_empty(d: Path):
+    """I12 澄清空壳：00e 澄清记录抹成空模板（用户口语没翻译）。"""
+    p = d / "00e-需求澄清.md"
+    t = p.read_text(encoding="utf-8")
+    # 把澄清记录里的 C 行抹空
+    t = re.sub(r"\| C\d+ \|[^\n]*", "| C1 |  |  |  | __ |", t)
+    p.write_text(t, encoding="utf-8")
+
+
+def inj_expert_self_review(d: Path):
+    """I12 专家自审：00f 复核结论未勾选（翻译者=复核者，没真复核）。"""
+    p = d / "00f-专业复核.md"
+    t = p.read_text(encoding="utf-8")
+    t = t.replace("- [x] 通过", "- [ ] 通过")
+    p.write_text(t, encoding="utf-8")
+
+
 ATTACKS = [
     ("B1 自我豁免",        ["G2.9", "G3.9"],           inj_b1_self_exemption),
     ("B3 静默降级",        ["G3.3"],                   inj_b3_silent_downgrade),
@@ -189,6 +206,8 @@ ATTACKS = [
     ("空壳直交(模板交付)", None,                       inj_empty_shell),  # None = 有 NG 即可
     ("主线漂移(偏移超阈值)", ["I0.3"],                  inj_drift_overflow),
     ("意图锚点空壳",        ["I0.1"],                  inj_empty_anchor),
+    ("澄清记录空壳",        ["I12.1"],                 inj_intake_empty),
+    ("专家复核未勾选",      ["I12.3"],                 inj_expert_self_review),
 ]
 
 

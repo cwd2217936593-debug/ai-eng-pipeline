@@ -23,6 +23,8 @@ LIMITS = {
     "00a-意图主线.md": 500,
     "00c-领域取证.md": 1500,
     "00d-场景工况.md": 900,
+    "00e-需求澄清.md": 900,
+    "00f-专业复核.md": 600,
     "01-需求规格.md": 1200,
     "02-验收标准.md": 900,
     "03-架构方案.md": 1500,
@@ -39,6 +41,8 @@ REQUIRED_SECTIONS = {
     "00a-意图主线.md": ["锚点", "偏移记录"],
     "00c-领域取证.md": ["证据台账", "未取证清单", "架构适配假设", "取证能力"],
     "00d-场景工况.md": ["场景八槽位", "工况参数", "设计约束", "假设登记"],
+    "00e-需求澄清.md": ["澄清记录"],
+    "00f-专业复核.md": ["复核结论"],
     "01-需求规格.md": ["需求清单", "范围边界", "冲突与未决", "假设"],
     "02-验收标准.md": ["判据表"],
     "03-架构方案.md": ["取舍记录", "失败模式", "依赖", "验证路径"],
@@ -522,6 +526,8 @@ def check_structure(run: Path, stage: str) -> None:
     need = ["00-原文.md", "00a-意图主线.md"]
     if stage in ("g0", "g1", "all"):
         need += ["00d-场景工况.md"]
+    if stage in ("g0", "g1", "all"):
+        need += ["00e-需求澄清.md", "00f-专业复核.md"]
     if stage in ("g1", "all"):
         need += ["01-需求规格.md", "02-验收标准.md"]
     if stage in ("g2", "all"):
@@ -645,6 +651,59 @@ def check_intent(run: Path) -> None:
            "回 Stage 0 重提炼锚点，而非继续修")
     else:
         ok("I0.3", "累计偏移 %.2f ≤ 1.0，主线未漂移" % total_drift)
+
+
+# ---------------------------------------------------------------- I12 需求方非专业桥接
+
+def check_intake(run: Path) -> None:
+    """I12：需求方可以不懂行，但必须被问到点子上（00e 澄清 + 00f 专业复核）。"""
+    e = run / "00e-需求澄清.md"
+    f = run / "00f-专业复核.md"
+
+    # I12.0 00e 存在
+    if not (e.is_file() and e.stat().st_size > 0):
+        ng("I12.0", "缺 00e-需求澄清.md（I12 澄清未做）")
+        return
+    ok("I12.0", "存在 00e-需求澄清.md")
+
+    te = read(e)
+    # I12.1 澄清记录非空且三列齐（用户原话 / 专业含义 / 据此追问）
+    rows = _section_rows(te, "澄清记录") or []
+    real = [c for c in rows if c and re.match(r"C\d+", c[0]) and not is_stub_row(c)]
+    if not real:
+        ng("I12.1", "00e 澄清记录为空（用户口语未翻译）",
+           "lead 须用领域包槽位10框架提问，逐条记「用户原话/专业含义/追问」")
+    else:
+        bad = [c[0] for c in real if len(c) < 4
+               or is_blank(c[1]) or is_blank(c[2]) or is_blank(c[3])]
+        if bad:
+            ng("I12.1", "澄清记录三列不齐 <- %s" % ",".join(bad),
+               "每条须含 用户原话/专业含义/据此追问")
+        else:
+            ok("I12.1", "澄清记录 %d 条，三列齐" % len(real))
+
+    # I12.2 00f 存在且复核结论非空
+    if not (f.is_file() and f.stat().st_size > 0):
+        ng("I12.2", "缺 00f-专业复核.md（I12 专业复核未做）")
+        return
+    ok("I12.2", "存在 00f-专业复核.md")
+
+    tf = read(f)
+    concl = section(tf, "复核结论")
+    concl_body = re.sub(r"<!--.*?-->", "", concl, flags=re.S)
+    # 结论三选一：通过 / 需澄清 / 专业错误，勾选 [x]
+    checked = re.search(r"- \[[xX]\]\s*(通过|需澄清|专业错误)", concl_body)
+    if not checked:
+        ng("I12.3", "00f 复核结论未勾选（须三选一：通过/需澄清/专业错误）")
+    elif checked.group(1) == "通过":
+        ok("I12.3", "00f 复核结论 = 通过")
+    else:
+        # 非通过：必须有清单
+        items = _section_rows(tf, "待澄清") or _section_rows(tf, "专业错误清单") or []
+        if not items:
+            ng("I12.3", "00f 结论=%s 但无待澄清/错误清单" % checked.group(1))
+        else:
+            ok("I12.3", "00f 结论=%s，附清单 %d 条" % (checked.group(1), len(items)))
 
 
 # ---------------------------------------------------------------- G1
@@ -1217,6 +1276,7 @@ def main() -> int:
     check_word_limits(run)
     check_sections(run)
     check_intent(run)
+    check_intake(run)
     if args.stage in ("g1", "all"):
         check_g1(run)
     if args.stage in ("g2", "all"):
