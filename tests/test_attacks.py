@@ -155,6 +155,27 @@ def inj_empty_shell(d: Path):
         encoding="utf-8")
 
 
+def inj_drift_overflow(d: Path):
+    """I0 偏移超阈值：把各产物回指的偏移分累加 > 1.0，模拟主线漂移。"""
+    import itertools
+    vals = itertools.cycle([0.3, 0.2, 0.3, 0.1, 0.2])
+    for f in ["01-需求规格.md", "02-验收标准.md", "03-架构方案.md",
+              "04-实施路径.md", "06-盲审报告.md", "07-裁决记录.md", "08-追溯矩阵.md"]:
+        p = d / f
+        t = p.read_text(encoding="utf-8")
+        t = re.sub(r"偏移分 \d+(?:\.\d+)?", "偏移分 %.1f" % next(vals), t, count=1)
+        p.write_text(t, encoding="utf-8")
+
+
+def inj_empty_anchor(d: Path):
+    """I0 锚点空壳：00a 锚点段被抹回占位态。"""
+    p = d / "00a-意图主线.md"
+    t = p.read_text(encoding="utf-8")
+    t = re.sub(r"## 锚点\n\n.*?\n\n## 各棒偏移记录", "## 锚点\n\n__\n\n## 各棒偏移记录",
+               t, flags=re.S)
+    p.write_text(t, encoding="utf-8")
+
+
 ATTACKS = [
     ("B1 自我豁免",        ["G2.9", "G3.9"],           inj_b1_self_exemption),
     ("B3 静默降级",        ["G3.3"],                   inj_b3_silent_downgrade),
@@ -166,6 +187,8 @@ ATTACKS = [
     ("B4 空产物",          ["I.0"],                    inj_b4_empty_delivery),
     ("条号造假",           ["G2.9c"],                  inj_fake_clause),
     ("空壳直交(模板交付)", None,                       inj_empty_shell),  # None = 有 NG 即可
+    ("主线漂移(偏移超阈值)", ["I0.3"],                  inj_drift_overflow),
+    ("意图锚点空壳",        ["I0.1"],                  inj_empty_anchor),
 ]
 
 

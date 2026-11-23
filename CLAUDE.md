@@ -4,9 +4,20 @@
 
 ## 入口
 
-先读 `AGENTS.md`（通用约定），再读 `SKILL.md`（主流程）与 `references/core/invariants.md`（11 条不变量）。
+先读 `AGENTS.md`（通用约定），再读 `SKILL.md`（主流程）与 `references/core/invariants.md`（12 条不变量）。
 
 ## Claude Code 特有
+
+### 意图主线（I0）在 Claude Code 里的落地
+
+Claude Code 的多 agent 协作最典型就是"每个 subagent 各干一段、交接靠文件"。
+主线偏移在这里最容易发生：每个 subagent 都忠于自己拿到的文件，没有哪个忠于最初的问题。
+
+所以开工前**先让主 agent 提炼一条意图主线**写进 `00a-意图主线.md`（一句话：问题 + 成功标志，不含方案），
+然后每个 subagent 的 prompt 里**必须带上这条锚点原文**，并要求 subagent 在产物头部写「主线回指 + 偏移分」。
+subagent 交回后，主 agent 核对偏移分是否合理（0.4–0.6 停下对齐，累计 >1.0 回 Stage 0）。
+
+不要只给 subagent 一份需求文件就放它去干 —— 那正是"多 AI 稀释主线"的温床。
 
 ### 盲审用 Task 工具
 

@@ -20,6 +20,7 @@ from pathlib import Path
 
 LIMITS = {
     "00-原文.md": 5000,
+    "00a-意图主线.md": 500,
     "00c-领域取证.md": 1500,
     "00d-场景工况.md": 900,
     "01-需求规格.md": 1200,
@@ -35,6 +36,7 @@ BLACKLIST = ["好用", "易用", "友好", "高效", "快速", "稳定", "健壮
              "灵活", "尽量", "适当", "较好", "基本满足", "等等", "若干", "大量"]
 
 REQUIRED_SECTIONS = {
+    "00a-意图主线.md": ["锚点", "偏移记录"],
     "00c-领域取证.md": ["证据台账", "未取证清单", "架构适配假设", "取证能力"],
     "00d-场景工况.md": ["场景八槽位", "工况参数", "设计约束", "假设登记"],
     "01-需求规格.md": ["需求清单", "范围边界", "冲突与未决", "假设"],
@@ -517,7 +519,7 @@ def check_g010(run: Path) -> None:
 # ---------------------------------------------------------------- 结构
 
 def check_structure(run: Path, stage: str) -> None:
-    need = ["00-原文.md"]
+    need = ["00-原文.md", "00a-意图主线.md"]
     if stage in ("g0", "g1", "all"):
         need += ["00d-场景工况.md"]
     if stage in ("g1", "all"):
@@ -579,6 +581,70 @@ def check_sections(run: Path) -> None:
             ng("H." + name[:2], "%s 缺章节" % name, ",".join(missing))
         else:
             ok("H." + name[:2], "%s 章节齐备" % name)
+
+
+# ---------------------------------------------------------------- I0 意图主线
+
+def check_intent(run: Path) -> None:
+    """I0：意图主线锚点 + 偏移度量。方向不对，内部再自洽也是错的。"""
+    a = run / "00a-意图主线.md"
+    if not a.is_file() or a.stat().st_size == 0:
+        ng("I0.0", "缺 00a-意图主线.md（I0 锚点未建）")
+        return
+    ta = read(a)
+    # 锚点段非空，且不是占位
+    anchor = section(ta, "锚点")
+    # 剥掉引用行(>) 与占位符，剩下来的才是真内容
+    anchor_lines = [ln for ln in anchor.splitlines()
+                    if not ln.lstrip().startswith(">") and not ln.lstrip().startswith("#")]
+    anchor_txt = "\n".join(anchor_lines).strip()
+    anchor_txt = re.sub(r"^_{2,}$|^—+$|^\.{3,}$", "", anchor_txt, flags=re.M).strip()
+    if not anchor_txt or is_blank(anchor_txt):
+        ng("I0.1", "00a 锚点段为空或占位", "lead 须从 00 提炼一条冻结的意图主线")
+    else:
+        ok("I0.1", "00a 锚点已提炼（%d 字）" % count_units(anchor_txt))
+
+    # 每个产物头部有「主线回指」行，且含偏移分数字
+    prods = ["01-需求规格.md", "02-验收标准.md", "03-架构方案.md", "04-实施路径.md",
+             "06-盲审报告.md", "07-裁决记录.md", "08-追溯矩阵.md"]
+    total_drift = 0.0
+    missing = []
+    for name in prods:
+        p = run / name
+        if not p.is_file():
+            continue
+        t = read(p)
+        # 只查文件头部（前 8 行），回指必须是头部声明
+        head = "\n".join(t.splitlines()[:8])
+        m = re.search(r"主线回指[：:]\s*(.*)", head)
+        if not m:
+            missing.append(name)
+            continue
+        back = m.group(1)
+        dm = re.search(r"偏移分\s*(\d+(?:\.\d+)?)", back)
+        if not dm:
+            missing.append("%s(无偏移分)" % name)
+            continue
+        # 回指内容不能只是占位
+        inner = re.sub(r"锚点「(.*?)」|偏移分.*", "", back).strip()
+        if not inner or is_blank(inner):
+            missing.append("%s(回指为空)" % name)
+            continue
+        total_drift += float(dm.group(1))
+    if missing:
+        ng("I0.2", "产物缺主线回指 <- %s" % "; ".join(missing),
+           "I0：每个产物头部须声明「服务于锚点哪一点 + 偏移分」，回指不上即偏移")
+    else:
+        ok("I0.2", "7 份产物均有主线回指")
+
+    # 累计偏移 > 1.0 判漂移；但若回指缺失，累计分无意义，不单独判 OK
+    if missing:
+        ng("I0.3", "回指缺失，累计偏移无法判定", "先补齐 I0.2 的回指")
+    elif total_drift > 1.0:
+        ng("I0.3", "累计偏移 %.2f 超阈值 1.0，主线已漂移" % total_drift,
+           "回 Stage 0 重提炼锚点，而非继续修")
+    else:
+        ok("I0.3", "累计偏移 %.2f ≤ 1.0，主线未漂移" % total_drift)
 
 
 # ---------------------------------------------------------------- G1
@@ -1150,6 +1216,7 @@ def main() -> int:
         check_g010(run)
     check_word_limits(run)
     check_sections(run)
+    check_intent(run)
     if args.stage in ("g1", "all"):
         check_g1(run)
     if args.stage in ("g2", "all"):

@@ -36,6 +36,7 @@ agent_created: true
    |  写 00d-场景工况.md（量什么尺寸）<- 三级推导 SC->OP->DC
    |    `-- 用户给不出参数 -> 分「知识缺口/输入缺口」-> 假设登记（有上限）
    |  挂规则包 rulepacks/<pack>@<ver>
+   |  写 00a-意图主线.md（提炼一条冻结的锚点，I0 最高优先级）
    |  G0 + G0.10 --否--> 重写 00b/00d（领域或场景错了后面全废）
    |  用户确认
 === Stage 1+ · 施工（按 00b 实例化角色，按 L0-L7 往下走）===
@@ -47,6 +48,7 @@ agent_created: true
    |  builder 写 05 交付实体
    |  reviewer（独立子代理）写 06 盲审 + 08 追溯矩阵
    |  G3 --否--> 退回 builder（同一问题 ≤3 轮）--> 超轮 lead 裁决写 07
+   |  每棒产物头部写「主线回指 + 偏移分」，累计偏移 >1.0 回 Stage 0（I0）
    |
 交付：能交/不能交 + 每条 AC 证据 + 追溯闭合 + 遗留清单
 ```
@@ -57,10 +59,11 @@ agent_created: true
 ## 4. 每阶段动作
 
 **开工**：`python scripts/init_run.py "<需求原文>" --domain software --root .`
-建运行目录与 9 份空壳（`custom` 额外铺 `00c`，含 git init）。
+建运行目录与 11 份空壳（`custom` 额外铺 `00c`，含 git init）。
 
 | 阶段 | 动作 | 读哪个 reference |
 |---|---|---|
+| 0 主线 | 从 `00` 提炼一条意图主线，写 `00a`，用户确认后冻结（I0） | `references/core/intent-anchor.md` |
 | 0 领域 | 判领域、填 8 槽位、写 `00b`、请用户确认 | `references/core/stage0-instantiate.md` + `domains/<x>.md` |
 | 0b 取证 | **仅 custom**：三级通道取证、写 `00c`、过 G0.9 | `references/core/domain-discovery.md` |
 | 0c 场景 | 填 SC1–SC8、推 OP、定 DC、登记假设、写 `00d`、过 G0.10 | `references/core/scenario.md` |
@@ -76,11 +79,12 @@ agent_created: true
 
 五条硬规则，违反即返工：
 
-1. **下游只读文件，不读对话**。产物必须落盘，靠对话传递的理解 5 环后偏差约 40%。
-2. **architect 不读 00，reviewer 不读 03**。前者保证"验收标准够不够用"被真检验，后者保证审查不给作者找理由。
-3. **lead 只做三件事**：判级、选链、裁决。一干具体活就成幻觉源。
-4. **领域与场景都不能边干边换**。判错就回 Stage 0，`01`–`03` 作废，`07` 记裁决。
-5. **不变量不能因领域而变**。见 `references/core/invariants.md` 的 I1–I11。
+1. **意图先于一切（I0）**：Stage 0 先提炼一条冻结的意图主线，每个产物头部回指它。回指不上即偏移。
+2. **下游只读文件，不读对话**。产物必须落盘，靠对话传递的理解 5 环后偏差约 40%。
+3. **architect 不读 00，reviewer 不读 03**。前者保证"验收标准够不够用"被真检验，后者保证审查不给作者找理由。
+4. **lead 只做三件事**：判级、选链、裁决。一干具体活就成幻觉源。
+5. **领域与场景都不能边干边换**。判错就回 Stage 0，`01`–`03` 作废，`07` 记裁决。
+6. **不变量不能因领域而变**。见 `references/core/invariants.md` 的 I0–I11。
 
 第六条规定动作：**判"是"之前先自问三句**（可复现吗 / 判否我会损失什么 / 我是不是早就知道答案）。
 详见 `references/core/anti-bypass.md`。绕过形态 B1–B7 里，B1/B2/B3/B5 判 `VOID`，不是返工。
@@ -132,7 +136,7 @@ agent_created: true
 
 | 想问什么 | 看哪里 |
 |---|---|
-| 哪些规则绝不能变 | `references/core/invariants.md`（I1–I11） |
+| 哪些规则绝不能变 | `references/core/invariants.md`（I0–I11） |
 | 这次用什么标准验证 | `references/core/stage0-instantiate.md` + `domains/` |
 | 这个场景该怎么设计 | `references/core/scenario.md` |
 | 合格线在哪、出处是什么 | `references/core/rulepack.md` + `rulepacks/` |
