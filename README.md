@@ -79,18 +79,19 @@ python scripts/check_run.py run-YYYYMMDD-NN --stage g1
 python scripts/bump.py --run run-YYYYMMDD-NN --type feat --scope build --message "..." --commit
 ```
 
-然后让你的 AI 读 `SKILL.md`（WorkBuddy / Claude Skill）、`AGENTS.md`（Codex / Cursor / 通用）或 `PROMPT.md`（ChatGPT 类网页版）。
+然后让你的 AI 先读 `HANDOVER.md`（定位、现状、已知局限、待办），再读 `SKILL.md`（WorkBuddy / Claude Skill）、`AGENTS.md`（Codex / Cursor / 通用）或 `PROMPT.md`（ChatGPT 类网页版）。
 
 ## 目录结构
 
 ```
 ai-eng-pipeline/
 ├── SKILL.md                  主流程（WorkBuddy / Claude Skill 入口）
+├── HANDOVER.md               ★ 交接文件（先读它：定位/现状/局限/待办）
 ├── AGENTS.md                 通用入口（Codex / Cursor / Gemini CLI）
 ├── CLAUDE.md                 Claude Code 入口（含 Task 盲审写法）
 ├── PROMPT.md                 单文件版（给只能粘贴的 AI）
 ├── references/
-│   ├── core/                 ★ 内核（14 个文件）
+│   ├── core/                 ★ 内核（15 个文件）
 │   │   ├── invariants.md         13 条不变量（地基）
 │   │   ├── intent-anchor.md      ★ 意图主线锚点 + 偏移度量（I0，最高优先级）
 │   │   ├── intake-bridge.md      ★ 需求方非专业桥接 + 领域专家（I12）
@@ -111,7 +112,7 @@ ai-eng-pipeline/
 │   └── roles/                6 个角色卡（lead/spec/architect/builder/reviewer/domain-expert）
 ├── scripts/                  init_run / check_run / bump
 ├── tests/                    对抗回归测试（fixtures/base + 14 种作弊注入）
-└── assets/templates/         13 份产物空壳（占位符出厂，不含任何通过态）
+└── assets/templates/         14 份产物空壳（占位符出厂，不含任何通过态）
 ```
 
 ## 13 条不变量

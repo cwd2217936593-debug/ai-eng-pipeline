@@ -13,6 +13,7 @@
 
 按顺序，读到够用就停：
 
+0. `HANDOVER.md` —— 交接文件：定位、当前版本与同步状态、已知局限、待办。**接手时先读这个。**
 1. `SKILL.md` —— 主流程（约 2000 字）。**必读。**
 2. `references/core/invariants.md` —— 13 条不变量。**必读**，违反任何一条流程就失效。
 3. `references/core/stage0-instantiate.md` —— 第一段怎么定领域。
