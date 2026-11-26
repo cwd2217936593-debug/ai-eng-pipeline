@@ -978,7 +978,8 @@ def check_g3(run: Path) -> None:
     # 正文污染：即使清单干净，报告里也不能引用未授权的 01/03/04 内容
     body = re.sub(r"<!--.*?-->", "", r6, flags=re.S)
     body = body.replace(seg, "")
-    cite = re.findall(r"(01-需求规格|03-架构方案|04-实施路径|架构方案|架构文档|§\s*3[b-z]?)", body)
+    # 裸 `§3` 是 06 自引本节，合法；只有带文档号（03 §3）或点名架构文档才算污染
+    cite = re.findall(r"(01-需求规格|03-架构方案|04-实施路径|架构方案|架构文档|\b0[134]\s*§\s*\d)", body)
     if cite:
         leaked = list(leaked) + ["正文引用 " + c for c in sorted(set(cite))[:3]]
     if leaked:
